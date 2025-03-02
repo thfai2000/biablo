@@ -263,7 +263,21 @@ export class Game {
       const currentFloor = this.floors[this.currentFloor];
       if (currentFloor && result.direction) {
         // Place player at appropriate stairs
-        this.player.placeAtStairs(result.direction);
+        if (result.direction === 'up') {
+          this.player.placeAtStairs(result.direction, undefined, currentFloor.downStairsPos || undefined);
+          // Immediately center camera on down stairs
+          if (currentFloor.downStairsPos) {
+            this.cameraX = currentFloor.downStairsPos.x * this.tileSize - this.canvas.width / 2;
+            this.cameraY = currentFloor.downStairsPos.y * this.tileSize - this.canvas.height / 2;
+          }
+        } else {
+          this.player.placeAtStairs(result.direction, currentFloor.upStairsPos || undefined, undefined);
+          // Immediately center camera on up stairs
+          if (currentFloor.upStairsPos) {
+            this.cameraX = currentFloor.upStairsPos.x * this.tileSize - this.canvas.width / 2;
+            this.cameraY = currentFloor.upStairsPos.y * this.tileSize - this.canvas.height / 2;
+          }
+        }
       }
     }
     

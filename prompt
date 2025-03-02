@@ -28,4 +28,5 @@ Please refactor the StatsWidget which is Diablo-like style. You can also modify 
 That widget allows player to increase their stats when they level-up. The widget size is about is long rectangle. on left-hand size, there is a section shows the list of stats (e.g. strength..) , On the right hand side, there is a section shows the bag inventory and a body diagram. On the body diagram, there are slots which allows adding armor, weapon, helmt...so on. The ui should be user friendly for changing the equipements (come from the bag). 
 Draw some icon (pixel) to indicate the stats and slots...
 
-IMPORTANT: Limit your thinking and make your output not over 10K tokens!
+Don't fix any codes in the "public/js" folders. They are compiled codes.
+

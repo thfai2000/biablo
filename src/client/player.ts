@@ -383,7 +383,8 @@ export class Player {
   
   public placeAtStairs(direction: string, upStairsPos?: Position, downStairsPos?: Position): void {
     const game = (window as any).game;
-    // Place player at the appropriate stairs position after changing floors
+    // When going up, place player at down stairs of the upper floor
+    // When going down, place player at up stairs of the lower floor
     if (direction === 'up' && downStairsPos) {
       this.x = downStairsPos.x * game.tileSize;
       this.y = downStairsPos.y * game.tileSize;
