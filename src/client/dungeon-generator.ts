@@ -201,10 +201,44 @@ export class DungeonGenerator {
       }
     }
     
+    // Add trees around the village perimeter and some scattered within
+    for (let y = 5; y < this.height - 5; y++) {
+      for (let x = 5; x < this.width - 5; x++) {
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+        const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
+        
+        // Add trees near the perimeter of the village
+        if (distance < this.width / 3 && distance > this.width / 3.5) {
+          // Higher probability of trees near the edge
+          if (Math.random() < 0.4) {
+            this.map[y][x] = 4; // Tree
+          }
+        } 
+        // Add some random trees within the village
+        else if (distance < this.width / 3.5 && distance > this.width / 8) {
+          // Lower probability for scattered trees
+          if (Math.random() < 0.05) {
+            this.map[y][x] = 4; // Tree
+          }
+        }
+      }
+    }
+    
     // Add the dungeon entrance (cave) near the edge
     const caveX = Math.floor(this.width / 2);
     const caveY = Math.floor(this.height * 0.8);
     
+    // Clear trees around the cave entrance for better visibility
+    for (let y = caveY - 3; y <= caveY + 3; y++) {
+      for (let x = caveX - 4; x <= caveX + 4; x++) {
+        if (y >= 0 && y < this.height && x >= 0 && x < this.width && this.map[y][x] === 4) {
+          this.map[y][x] = 1; // Change tree back to floor
+        }
+      }
+    }
+    
+    // Add the cave entrance
     for (let y = caveY - 2; y <= caveY + 2; y++) {
       for (let x = caveX - 3; x <= caveX + 3; x++) {
         if (y >= 0 && y < this.height && x >= 0 && x < this.width) {

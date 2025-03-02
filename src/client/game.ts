@@ -20,6 +20,7 @@ interface Assets {
     floor: string;
     upStairs: string;
     downStairs: string;
+    tree: string; // New tree tile type
   };
 }
 
@@ -54,7 +55,8 @@ export class Game {
         wall: '#333',
         floor: '#555',
         upStairs: '#77f',
-        downStairs: '#f77'
+        downStairs: '#f77',
+        tree: '#0a5' // Green color for trees
       }
     };
     
@@ -246,24 +248,87 @@ export class Game {
         switch (tileType) {
           case 0: // Wall
             this.ctx.fillStyle = this.assets.tiles.wall;
+            this.ctx.fillRect(
+              x * this.tileSize - this.cameraX,
+              y * this.tileSize - this.cameraY,
+              this.tileSize,
+              this.tileSize
+            );
             break;
           case 1: // Floor
             this.ctx.fillStyle = this.assets.tiles.floor;
+            this.ctx.fillRect(
+              x * this.tileSize - this.cameraX,
+              y * this.tileSize - this.cameraY,
+              this.tileSize,
+              this.tileSize
+            );
             break;
           case 2: // Up stairs
             this.ctx.fillStyle = this.assets.tiles.upStairs;
+            this.ctx.fillRect(
+              x * this.tileSize - this.cameraX,
+              y * this.tileSize - this.cameraY,
+              this.tileSize,
+              this.tileSize
+            );
             break;
           case 3: // Down stairs
             this.ctx.fillStyle = this.assets.tiles.downStairs;
+            this.ctx.fillRect(
+              x * this.tileSize - this.cameraX,
+              y * this.tileSize - this.cameraY,
+              this.tileSize,
+              this.tileSize
+            );
+            break;
+          case 4: // Tree
+            // First draw the ground under the tree
+            this.ctx.fillStyle = this.assets.tiles.floor;
+            this.ctx.fillRect(
+              x * this.tileSize - this.cameraX,
+              y * this.tileSize - this.cameraY,
+              this.tileSize,
+              this.tileSize
+            );
+            
+            // Draw tree trunk (brown stem)
+            this.ctx.fillStyle = '#8B4513'; // Saddle brown for trunk
+            this.ctx.fillRect(
+              x * this.tileSize + this.tileSize * 0.45 - this.cameraX,
+              y * this.tileSize + this.tileSize * 0.5 - this.cameraY,
+              this.tileSize * 0.1,
+              this.tileSize * 0.5
+            );
+            
+            // Draw first layer of leaves (bottom, wider triangle)
+            this.ctx.fillStyle = '#228B22'; // Forest green
+            this.ctx.beginPath();
+            this.ctx.moveTo(x * this.tileSize + this.tileSize * 0.2 - this.cameraX, y * this.tileSize + this.tileSize * 0.6 - this.cameraY);
+            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.8 - this.cameraX, y * this.tileSize + this.tileSize * 0.6 - this.cameraY);
+            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.5 - this.cameraX, y * this.tileSize + this.tileSize * 0.25 - this.cameraY);
+            this.ctx.closePath();
+            this.ctx.fill();
+            
+            // Draw second layer of leaves (middle triangle)
+            this.ctx.fillStyle = '#32CD32'; // Lime green
+            this.ctx.beginPath();
+            this.ctx.moveTo(x * this.tileSize + this.tileSize * 0.25 - this.cameraX, y * this.tileSize + this.tileSize * 0.45 - this.cameraY);
+            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.75 - this.cameraX, y * this.tileSize + this.tileSize * 0.45 - this.cameraY);
+            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.5 - this.cameraX, y * this.tileSize + this.tileSize * 0.1 - this.cameraY);
+            this.ctx.closePath();
+            this.ctx.fill();
+            
+            // Draw top layer of leaves (smaller triangle)
+            this.ctx.fillStyle = '#90EE90'; // Light green
+            this.ctx.beginPath();
+            this.ctx.moveTo(x * this.tileSize + this.tileSize * 0.3 - this.cameraX, y * this.tileSize + this.tileSize * 0.3 - this.cameraY);
+            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.7 - this.cameraX, y * this.tileSize + this.tileSize * 0.3 - this.cameraY);
+            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.5 - this.cameraX, y * this.tileSize - this.cameraY);
+            this.ctx.closePath();
+            this.ctx.fill();
             break;
         }
-        
-        this.ctx.fillRect(
-          x * this.tileSize - this.cameraX,
-          y * this.tileSize - this.cameraY,
-          this.tileSize,
-          this.tileSize
-        );
       }
     }
     

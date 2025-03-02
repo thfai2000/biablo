@@ -244,13 +244,14 @@ export class Player {
     // Get reference to game for tileSize
     const game = (window as any).game;
     
-    // Collision detection with walls
+    // Collision detection with walls and trees
     const tileX = Math.floor(this.x / game.tileSize);
     const tileY = Math.floor(this.y / game.tileSize);
     
-    // Ensure player stays on walkable tiles
-    if (tileX < 0 || tileX >= map[0].length || tileY < 0 || tileY >= map.length || map[tileY][tileX] === 0) {
-      // Collision with a wall or out of bounds, revert to previous position
+    // Ensure player stays on walkable tiles (0=wall, 4=tree are non-walkable)
+    if (tileX < 0 || tileX >= map[0].length || tileY < 0 || tileY >= map.length || 
+        map[tileY][tileX] === 0 || map[tileY][tileX] === 4) {
+      // Collision with a wall, tree, or out of bounds, revert to previous position
       this.x = oldX;
       this.y = oldY;
     }
@@ -376,8 +377,9 @@ export class Player {
     // Draw the map tiles
     for (let y = 0; y < map.length; y++) {
       for (let x = 0; x < map[y].length; x++) {
-        // Only draw the tile if it's walkable
-        if (map[y][x] === 1) {
+        const tileType = map[y][x];
+        // Draw different colored tiles based on their type
+        if (tileType === 1) { // Floor
           ctx.fillStyle = 'rgba(150, 150, 150, 0.8)';
           ctx.fillRect(
             x * tileSize,
@@ -385,6 +387,24 @@ export class Player {
             tileSize,
             tileSize
           );
+        } else if (tileType === 4) { // Tree - draw as triangle
+          // Draw floor underneath first
+          ctx.fillStyle = 'rgba(150, 150, 150, 0.8)';
+          ctx.fillRect(
+            x * tileSize,
+            y * tileSize,
+            tileSize,
+            tileSize
+          );
+          
+          // Draw tree as a small triangle
+          ctx.fillStyle = 'rgba(34, 139, 34, 0.8)'; // Forest green
+          ctx.beginPath();
+          ctx.moveTo(x * tileSize + tileSize / 2, y * tileSize);
+          ctx.lineTo(x * tileSize + tileSize, y * tileSize + tileSize);
+          ctx.lineTo(x * tileSize, y * tileSize + tileSize);
+          ctx.closePath();
+          ctx.fill();
         }
       }
     }
