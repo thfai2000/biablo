@@ -57,7 +57,7 @@ export class Game {
     this.lastTime = 0;
     this.showStatusPopup = false;
     this.statusButtonRect = { x: 0, y: 0, width: 0, height: 0 };
-    this.statsWidget = new StatsWidget(); // Initialize StatsWidget
+    this.statsWidget = new StatsWidget(); // Initialize StatsWidget without player - will be set later
     
     // Assets
     this.assets = {
@@ -89,6 +89,9 @@ export class Game {
     // Initialize player
     this.player = new Player(this.config);
     
+    // Now that we have the player, set it in the stats widget
+    this.statsWidget.setPlayer(this.player);
+    
     // Generate the initial floor (village)
     this.generateFloor(0);
     
@@ -118,21 +121,15 @@ export class Game {
   }
 
   handleCanvasClick(event: MouseEvent): void {
-    if (!this.showStatusPopup) return;
-    
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     
-    // Close popup if clicking outside of it
-    const popupX = this.canvas.width / 2 - 200;
-    const popupY = this.canvas.height / 2 - 250;
-    const popupWidth = 400;
-    const popupHeight = 500;
-    
-    if (!(x >= popupX && x <= popupX + popupWidth &&
-          y >= popupY && y <= popupY + popupHeight)) {
-      this.showStatusPopup = false;
+    if (this.statsWidget.isCurrentlyVisible()) {
+      // Let stats widget handle the click if it's visible
+      this.statsWidget.handleCanvasClick(x, y, this.canvas);
+      this.render(); // Re-render to show any changes
+      return;
     }
   }
   
@@ -246,11 +243,7 @@ export class Game {
       const currentFloor = this.floors[this.currentFloor];
       if (currentFloor && result.direction) {
         // Place player at appropriate stairs
-        this.player.placeAtStairs(
-          result.direction, 
-          currentFloor.upStairsPos || undefined, 
-          currentFloor.downStairsPos || undefined
-        );
+        this.player.placeAtStairs(result.direction);
       }
     }
     
@@ -398,102 +391,9 @@ export class Game {
     this.ctx.fillText(`Mana: ${playerStats.currentMana}/${playerStats.maxMana}`, 10, 110);
     
     // Draw status popup if open
-    if (this.statsWidget.isCurrentlyVisible()) { // Use StatsWidget's visibility
-      this.statsWidget.render(this.ctx, this.canvas, this.player); // Render StatsWidget
+    if (this.statsWidget.isCurrentlyVisible()) {
+        this.statsWidget.renderCanvas(this.ctx, this.canvas);
     }
-  }
-
-  renderStatusPopup(): void {
-    if (!this.player) return;
-    
-    const playerStats = this.player.getStats();
-    const inventory = this.player.getInventory();
-    const equipment = this.player.getEquipment();
-    
-    // Draw popup background
-    const popupX = this.canvas.width / 2 - 200;
-    const popupY = this.canvas.height / 2 - 250;
-    const popupWidth = 400;
-    const popupHeight = 500;
-    
-    // Semi-transparent background
-    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    // Popup panel
-    this.ctx.fillStyle = '#222';
-    this.ctx.fillRect(popupX, popupY, popupWidth, popupHeight);
-    
-    // Popup border
-    this.ctx.strokeStyle = '#gold';
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(popupX, popupY, popupWidth, popupHeight);
-    
-    // Title
-    this.ctx.fillStyle = '#gold';
-    this.ctx.font = 'bold 20px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('Player Status', popupX + popupWidth / 2, popupY + 30);
-    this.ctx.textAlign = 'left';
-    
-    // Draw stats section
-    this.ctx.fillStyle = '#aaa';
-    this.ctx.font = '16px Arial';
-    this.ctx.fillText('Stats:', popupX + 20, popupY + 60);
-    
-    this.ctx.fillStyle = 'white';
-    this.ctx.font = '14px Arial';
-    this.ctx.fillText(`Health: ${playerStats.currentHealth}/${playerStats.maxHealth}`, popupX + 30, popupY + 85);
-    this.ctx.fillText(`Mana: ${playerStats.currentMana}/${playerStats.maxMana}`, popupX + 30, popupY + 105);
-    this.ctx.fillText(`Strength: ${playerStats.strength}`, popupX + 30, popupY + 125);
-    this.ctx.fillText(`Dexterity: ${playerStats.dexterity}`, popupX + 30, popupY + 145);
-    this.ctx.fillText(`Intelligence: ${playerStats.intelligence}`, popupX + 30, popupY + 165);
-    this.ctx.fillText(`Level: ${playerStats.level}`, popupX + 30, popupY + 185);
-    this.ctx.fillText(`Experience: ${playerStats.experience}/${playerStats.nextLevelExp}`, popupX + 30, popupY + 205);
-    
-    // Draw equipment section
-    this.ctx.fillStyle = '#aaa';
-    this.ctx.font = '16px Arial';
-    this.ctx.fillText('Equipment:', popupX + 20, popupY + 235);
-    
-    this.ctx.fillStyle = 'white';
-    this.ctx.font = '14px Arial';
-    this.ctx.fillText(`Weapon: ${equipment.weapon ? equipment.weapon.name : 'None'}`, popupX + 30, popupY + 260);
-    this.ctx.fillText(`Armor: ${equipment.armor ? equipment.armor.name : 'None'}`, popupX + 30, popupY + 280);
-    this.ctx.fillText(`Helmet: ${equipment.helmet ? equipment.helmet.name : 'None'}`, popupX + 30, popupY + 300);
-    this.ctx.fillText(`Boots: ${equipment.boots ? equipment.boots.name : 'None'}`, popupX + 30, popupY + 320);
-    
-    // Draw inventory section
-    this.ctx.fillStyle = '#aaa';
-    this.ctx.font = '16px Arial';
-    this.ctx.fillText('Inventory:', popupX + 20, popupY + 350);
-    
-    this.ctx.fillStyle = 'white';
-    this.ctx.font = '14px Arial';
-    if (inventory.length === 0) {
-      this.ctx.fillText('Empty', popupX + 30, popupY + 375);
-    } else {
-      inventory.slice(0, 5).forEach((item, index) => {
-        this.ctx.fillText(`${index + 1}. ${item.name} ${item.quantity > 1 ? `(${item.quantity})` : ''}`, 
-          popupX + 30, popupY + 375 + index * 20);
-      });
-      
-      if (inventory.length > 5) {
-        this.ctx.fillText(`... and ${inventory.length - 5} more items`, popupX + 30, popupY + 475);
-      }
-    }
-    
-    // Close button
-    this.ctx.fillStyle = '#444';
-    this.ctx.fillRect(popupX + popupWidth - 80, popupY + 10, 60, 25);
-    this.ctx.strokeStyle = '#aaa';
-    this.ctx.strokeRect(popupX + popupWidth - 80, popupY + 10, 60, 25);
-    
-    this.ctx.fillStyle = 'white';
-    this.ctx.font = '12px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.fillText('Close', popupX + popupWidth - 50, popupY + 25);
-    this.ctx.textAlign = 'left';
   }
 }
 

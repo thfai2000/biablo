@@ -1,12 +1,34 @@
 import { Player } from './player';
 
+// Define our own simple icons since we can't import them
+const STAT_ICONS = {
+  strength: '💪',
+  dexterity: '🏃',
+  intelligence: '🧠'
+};
+
+// Interface for storing UI-specific data per inventory item
+interface ButtonBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export class StatsWidget {
-  private isVisible: boolean;
+  private player: Player | null = null;
+  private selectedInventoryItem: any | null = null;
+  private isVisible: boolean = false;
+  private buttonBoundsMap: Map<string, ButtonBounds> = new Map();
   
   constructor() {
     this.isVisible = false;
   }
 
+  setPlayer(player: Player): void {
+    this.player = player;
+  }
+  
   isCurrentlyVisible(): boolean {
     return this.isVisible;
   }
@@ -15,10 +37,10 @@ export class StatsWidget {
     this.isVisible = !this.isVisible;
   }
   
-  render(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, player: Player): void {
-    if (!this.isVisible || !player) return;
+  renderCanvas(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
+    if (!this.isVisible || !this.player) return;
     
-    const popupX = canvas.width / 2 - 300; // Adjust position and size
+    const popupX = canvas.width / 2 - 300;
     const popupY = canvas.height / 2 - 200;
     const popupWidth = 600;
     const popupHeight = 400;
@@ -27,8 +49,8 @@ export class StatsWidget {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Popup panel
-    ctx.fillStyle = '#222';
+    // Popup panel with background
+    ctx.fillStyle = '#333';
     ctx.fillRect(popupX, popupY, popupWidth, popupHeight);
     
     // Popup border
@@ -44,10 +66,10 @@ export class StatsWidget {
     ctx.textAlign = 'left';
     
     // Left side: Stats
-    this.renderStats(ctx, popupX + 20, popupY + 60, player);
+    this.renderStatsSection(ctx, popupX + 20, popupY + 60);
     
-    // Right side: Inventory and Body Diagram
-    this.renderInventoryAndBody(ctx, popupX + popupWidth / 2, popupY + 60, player, canvas);
+    // Right side: Equipment and Inventory
+    this.renderEquipmentSection(ctx, popupX + popupWidth / 2, popupY + 60, popupWidth, canvas);
     
     // Close button
     ctx.fillStyle = '#444';
@@ -62,7 +84,10 @@ export class StatsWidget {
     ctx.textAlign = 'left';
   }
   
-  renderStats(ctx: CanvasRenderingContext2D, x: number, y: number, player: Player): void {
+  private renderStatsSection(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    if (!this.player) return;
+    const playerStats = this.player.getStats();
+    
     ctx.fillStyle = '#aaa';
     ctx.font = '16px Arial';
     ctx.fillText('Stats:', x, y);
@@ -71,103 +96,263 @@ export class StatsWidget {
     ctx.font = '14px Arial';
     let currentY = y + 25;
     
-    const playerStats = player.getStats();
-    ctx.fillText(`Health: ${playerStats.currentHealth}/${playerStats.maxHealth}`, x + 10, currentY);
-    currentY += 20;
-    ctx.fillText(`Mana: ${playerStats.currentMana}/${playerStats.maxMana}`, x + 10, currentY);
-    currentY += 20;
-    ctx.fillText(`Strength: ${playerStats.strength}`, x + 10, currentY);
-    currentY += 20;
-    ctx.fillText(`Dexterity: ${playerStats.dexterity}`, x + 10, currentY);
-    currentY += 20;
-    ctx.fillText(`Intelligence: ${playerStats.intelligence}`, x + 10, currentY);
-    currentY += 20;
+    // Level and Experience
     ctx.fillText(`Level: ${playerStats.level}`, x + 10, currentY);
     currentY += 20;
-    ctx.fillText(`Experience: ${playerStats.experience}/${playerStats.nextLevelExp}`, x + 10, currentY);
     
-    // Add "Increase" buttons if player has level-up points
-    if (player.hasLevelUpPoints()) {
-      ctx.fillStyle = '#00ff00'; // Green color
-      ctx.font = '12px Arial';
-      
-      let buttonY = y + 25;
-      const buttonX = x + 150;
-      const buttonWidth = 80;
-      const buttonHeight = 20;
-      
-      // Example: Strength increase button
-      ctx.fillRect(buttonX, buttonY - 15, buttonWidth, buttonHeight);
-      ctx.fillStyle = '#000';
-      ctx.fillText('Increase', buttonX + 10, buttonY);
-      
-      // Add click detection logic later
-    }
+    // Experience bar
+    const expBarWidth = 150;
+    const expBarHeight = 10;
+    const expProgress = Math.min(playerStats.experience / playerStats.nextLevelExp, 1);
+    
+    // Bar background
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x + 10, currentY, expBarWidth, expBarHeight);
+    
+    // Progress bar
+    ctx.fillStyle = '#4CAF50';
+    ctx.fillRect(x + 10, currentY, expBarWidth * expProgress, expBarHeight);
+    
+    // Text
+    ctx.fillStyle = 'white';
+    ctx.fillText(`Experience: ${playerStats.experience}/${playerStats.nextLevelExp}`, x + 10, currentY + 25);
+    currentY += 40;
+    
+    // Core stats
+    const statNames = ['strength', 'dexterity', 'intelligence'];
+    statNames.forEach(statName => {
+      const icon = STAT_ICONS[statName as keyof typeof STAT_ICONS];
+      ctx.fillText(`${icon} ${statName.charAt(0).toUpperCase() + statName.slice(1)}: ${playerStats[statName as keyof typeof playerStats]}`, 
+                   x + 10, currentY);
+      currentY += 20;
+    });
+    
+    // Health and Mana bars
+    currentY += 10;
+    
+    // Health bar
+    const barWidth = 150;
+    const barHeight = 12;
+    const healthPercent = playerStats.currentHealth / playerStats.maxHealth;
+    
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x + 10, currentY, barWidth, barHeight);
+    
+    ctx.fillStyle = '#e53935';
+    ctx.fillRect(x + 10, currentY, barWidth * healthPercent, barHeight);
+    
+    ctx.fillStyle = 'white';
+    ctx.font = '12px Arial';
+    ctx.fillText(`❤️ Health: ${playerStats.currentHealth}/${playerStats.maxHealth}`, x + 10, currentY + 25);
+    currentY += 35;
+    
+    // Mana bar
+    const manaPercent = playerStats.currentMana / playerStats.maxMana;
+    
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x + 10, currentY, barWidth, barHeight);
+    
+    ctx.fillStyle = '#2196F3';
+    ctx.fillRect(x + 10, currentY, barWidth * manaPercent, barHeight);
+    
+    ctx.fillStyle = 'white';
+    ctx.fillText(`🔮 Mana: ${playerStats.currentMana}/${playerStats.maxMana}`, x + 10, currentY + 25);
   }
   
-  renderInventoryAndBody(ctx: CanvasRenderingContext2D, x: number, y: number, player: Player, canvas: HTMLCanvasElement): void {
+  private renderEquipmentSection(ctx: CanvasRenderingContext2D, x: number, y: number, popupWidth: number, canvas: HTMLCanvasElement): void {
+    if (!this.player) return;
+    
     ctx.fillStyle = '#aaa';
     ctx.font = '16px Arial';
     ctx.fillText('Equipment:', x, y);
     
+    // Display equipment
     ctx.fillStyle = 'white';
     ctx.font = '14px Arial';
     let currentY = y + 25;
     
-    const equipment = player.getEquipment();
-    ctx.fillText(`Weapon: ${equipment.weapon ? equipment.weapon.name : 'None'}`, x + 10, currentY);
-    currentY += 20;
-    ctx.fillText(`Armor: ${equipment.armor ? equipment.armor.name : 'None'}`, x + 10, currentY);
-    currentY += 20;
-    ctx.fillText(`Helmet: ${equipment.helmet ? equipment.helmet.name : 'None'}`, x + 10, currentY);
-    currentY += 20;
-    ctx.fillText(`Boots: ${equipment.boots ? equipment.boots.name : 'None'}`, x + 10, currentY);
+    const equipment = this.player.getEquipment();
     
-    // Draw body diagram with equipment slots
-    this.drawBodyDiagram(ctx, x + 10, currentY + 20);
+    // Equipment slots
+    const slots = [
+      { name: 'Weapon', item: equipment.weapon },
+      { name: 'Armor', item: equipment.armor },
+      { name: 'Helmet', item: equipment.helmet },
+      { name: 'Boots', item: equipment.boots }
+    ];
+    
+    slots.forEach(slot => {
+      ctx.fillText(`${slot.name}: ${slot.item ? slot.item.name : 'None'}`, x + 10, currentY);
+      currentY += 25;
+      
+      if (slot.item && slot.item.stats) {
+        const stats = slot.item.stats;
+        ctx.font = '12px Arial';
+        ctx.fillStyle = '#aaa';
+        
+        if (stats.damage) {
+          ctx.fillText(`Damage: +${stats.damage}`, x + 20, currentY);
+          currentY += 15;
+        }
+        if (stats.defense) {
+          ctx.fillText(`Defense: +${stats.defense}`, x + 20, currentY);
+          currentY += 15;
+        }
+        if (stats.strengthBonus) {
+          ctx.fillText(`Strength: +${stats.strengthBonus}`, x + 20, currentY);
+          currentY += 15;
+        }
+        if (stats.dexterityBonus) {
+          ctx.fillText(`Dexterity: +${stats.dexterityBonus}`, x + 20, currentY);
+          currentY += 15;
+        }
+        if (stats.intelligenceBonus) {
+          ctx.fillText(`Intelligence: +${stats.intelligenceBonus}`, x + 20, currentY);
+          currentY += 15;
+        }
+        
+        ctx.fillStyle = 'white';
+        ctx.font = '14px Arial';
+        currentY += 5;
+      }
+    });
+    
+    // Inventory header
+    currentY += 10;
+    ctx.fillStyle = '#aaa';
+    ctx.fillText('Inventory:', x, currentY);
+    currentY += 25;
     
     // Draw inventory
-    ctx.fillStyle = '#aaa';
-    ctx.font = '16px Arial';
-    ctx.fillText('Inventory:', x, currentY + 150);
+    const inventory = this.player.getInventory();
     
-    ctx.fillStyle = 'white';
-    ctx.font = '14px Arial';
-    const inventory = player.getInventory();
+    // Clear button bounds map before redrawing
+    this.buttonBoundsMap.clear();
+    
     if (inventory.length === 0) {
-      ctx.fillText('Empty', x + 10, currentY + 175);
+      ctx.fillStyle = '#aaa';
+      ctx.fillText('Empty', x + 10, currentY);
     } else {
-      inventory.slice(0, 5).forEach((item, index) => {
-        ctx.fillText(`${index + 1}. ${item.name} ${item.quantity > 1 ? `(${item.quantity})` : ''}`,
-          x + 10, currentY + 175 + index * 20);
+      // Show only first 8 items to avoid overflow
+      const itemsToShow = inventory.slice(0, 8);
+      
+      itemsToShow.forEach((item, index) => {
+        const isSelected = item === this.selectedInventoryItem;
+        
+        // Highlight selected item
+        if (isSelected) {
+          ctx.fillStyle = '#444';
+          ctx.fillRect(x, currentY - 15, 200, 20);
+          ctx.fillStyle = '#ffcc00';
+        } else {
+          ctx.fillStyle = 'white';
+        }
+        
+        ctx.fillText(`${item.name}${item.quantity > 1 ? ` (x${item.quantity})` : ''}`, x + 10, currentY);
+        
+        // Add button for using/equipping if there's room
+        if (item.type === 'potion' || ['weapon', 'armor', 'helmet', 'boots'].includes(item.type)) {
+          const buttonText = item.type === 'potion' ? 'Use' : 'Equip';
+          const buttonWidth = 60;
+          const buttonHeight = 20;
+          const buttonX = x + 180;
+          const buttonY = currentY - 15;
+          
+          // Button background
+          ctx.fillStyle = item.type === 'potion' ? '#4CAF50' : '#2196F3';
+          ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+          
+          // Button text
+          ctx.fillStyle = 'white';
+          ctx.font = '12px Arial';
+          ctx.fillText(buttonText, buttonX + 20, buttonY + 14);
+          
+          // Store button position for click handling
+          this.buttonBoundsMap.set(item.id, { 
+            x: buttonX, 
+            y: buttonY, 
+            width: buttonWidth, 
+            height: buttonHeight 
+          });
+        }
+        
+        currentY += 25;
       });
       
-      if (inventory.length > 5) {
-        ctx.fillText(`... and ${inventory.length - 5} more items`, x + 10, currentY + 275);
+      if (inventory.length > 8) {
+        ctx.fillStyle = '#aaa';
+        ctx.fillText(`...and ${inventory.length - 8} more items`, x + 10, currentY);
       }
     }
   }
   
-  drawBodyDiagram(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-    // Basic body outline
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, 80, 120); // Body
-    ctx.strokeRect(x + 20, y - 30, 40, 30); // Head/Helmet
-    ctx.strokeRect(x, y + 30, 80, 30); // Armor
-    ctx.strokeRect(x, y + 90, 80, 30); // Boots
-    ctx.strokeRect(x - 30, y + 30, 30, 60); // Weapon
+  handleCanvasClick(x: number, y: number, canvas: HTMLCanvasElement): void {
+    if (!this.isVisible || !this.player) return;
     
-    // Add labels
-    ctx.fillStyle = '#ddd';
-    ctx.font = '12px Arial';
-    ctx.fillText('Head', x + 25, y - 15);
-    ctx.fillText('Armor', x + 25, y + 50);
-    ctx.fillText('Boots', x + 25, y + 110);
-    ctx.fillText('Weapon', x - 25, y + 50);
-  }
-  
-  increaseStat(player: Player, stat: string): void {
-    // Logic to decrement level-up points and increment the chosen stat
+    const popupX = canvas.width / 2 - 300;
+    const popupY = canvas.height / 2 - 200;
+    const popupWidth = 600;
+    const popupHeight = 400;
+    
+    // Check if close button was clicked
+    if (x >= popupX + popupWidth - 80 && x <= popupX + popupWidth - 20 && 
+        y >= popupY + 10 && y <= popupY + 35) {
+      this.toggle();
+      return;
+    }
+    
+    // Check if an inventory item button was clicked
+    const inventory = this.player.getInventory();
+    
+    for (const item of inventory) {
+      const buttonBounds = this.buttonBoundsMap.get(item.id);
+      if (buttonBounds) {
+        if (x >= buttonBounds.x && x <= buttonBounds.x + buttonBounds.width && 
+            y >= buttonBounds.y && y <= buttonBounds.y + buttonBounds.height) {
+          if (item.type === 'potion') {
+            this.player.useItem(item.id);
+          } else if (['weapon', 'armor', 'helmet', 'boots'].includes(item.type)) {
+            this.player.equipItem(item.id);
+          }
+          return;
+        }
+      }
+    }
+    
+    // Check for inventory item selection
+    const equipmentY = popupY + 60;
+    let inventoryStartY = equipmentY + 25;
+    
+    // Add height for equipment section
+    const equipment = this.player.getEquipment();
+    const slots = [equipment.weapon, equipment.armor, equipment.helmet, equipment.boots];
+    slots.forEach(item => {
+      inventoryStartY += 25;
+      if (item && item.stats) {
+        let statCount = 0;
+        if (item.stats.damage) statCount++;
+        if (item.stats.defense) statCount++;
+        if (item.stats.strengthBonus) statCount++;
+        if (item.stats.dexterityBonus) statCount++;
+        if (item.stats.intelligenceBonus) statCount++;
+        
+        inventoryStartY += statCount * 15 + 5;
+      }
+    });
+    
+    inventoryStartY += 35;
+    
+    // Check if clicking in inventory item area
+    const inventoryX = popupX + popupWidth / 2;
+    const itemHeight = 25;
+    
+    for (let i = 0; i < Math.min(inventory.length, 8); i++) {
+      const itemY = inventoryStartY + i * itemHeight;
+      if (x >= inventoryX && x <= inventoryX + 200 && 
+          y >= itemY - 15 && y <= itemY + 5) {
+        this.selectedInventoryItem = this.selectedInventoryItem === inventory[i] ? null : inventory[i];
+        return;
+      }
+    }
   }
 }

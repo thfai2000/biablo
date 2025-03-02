@@ -1,0 +1,318 @@
+/* Diablo-inspired dark fantasy style */
+
+:root {
+  --primary-color: #a87c26;
+  --dark-bg: #1a1a1a;
+  --darker-bg: #0a0a0a;
+  --panel-bg: #2a2a2a;
+  --border-color: #a87c26;
+  --text-color: #d4d4d4;
+  --accent-color: #c00;
+  --highlight-color: #ffd700;
+}
+
+.stats-widget {
+  display: flex;
+  background-color: var(--dark-bg);
+  color: var(--text-color);
+  width: 800px;
+  height: 500px;
+  border: 2px solid var(--border-color);
+  font-family: 'Cinzel', serif;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+
+/* Left panel - Stats */
+.stats-panel {
+  flex: 0 0 300px;
+  background-color: var(--panel-bg);
+  border-right: 1px solid var(--border-color);
+  padding: 15px;
+  overflow-y: auto;
+}
+
+.level-info {
+  text-align: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+h2 {
+  color: var(--primary-color);
+  margin: 0 0 10px 0;
+  font-size: 18px;
+}
+
+.level-up-btn {
+  background-color: var(--primary-color);
+  color: var(--text-color);
+  border: none;
+  padding: 5px 15px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.level-up-btn:hover {
+  background-color: var(--highlight-color);
+  color: var(--darker-bg);
+}
+
+.stats-display {
+  margin-top: 20px;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid rgba(168, 124, 38, 0.3);
+}
+
+.stat-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-name {
+  flex: 1;
+  font-weight: bold;
+}
+
+.stat-value {
+  margin: 0 10px;
+}
+
+.bonus-value {
+  color: var(--highlight-color);
+}
+
+.increase-stat-btn {
+  width: 24px;
+  height: 24px;
+  background-color: var(--primary-color);
+  color: var(--text-color);
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.increase-stat-btn:disabled {
+  background-color: #555;
+  cursor: not-allowed;
+}
+
+.available-points {
+  margin-top: 20px;
+  font-weight: bold;
+  text-align: center;
+  color: var(--highlight-color);
+}
+
+/* Right panel - Equipment and Inventory */
+.equipment-panel {
+  flex: 1;
+  background-color: var(--darker-bg);
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Equipment display */
+.equipment-display {
+  flex: 1;
+  margin-bottom: 15px;
+}
+
+.body-diagram {
+  position: relative;
+  height: 200px;
+  width: 100%;
+  margin: 0 auto;
+  border: 1px solid var(--border-color);
+  background-color: var(--panel-bg);
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="150" viewBox="0 0 100 150"><path d="M50,30 Q65,30 65,50 Q65,75 50,90 Q35,75 35,50 Q35,30 50,30 Z M45,15 Q50,10 55,15 Q60,20 55,25 Q50,30 45,25 Q40,20 45,15 Z M40,55 L25,70 M60,55 L75,70 M50,90 L50,120 M40,120 L30,140 M60,120 L70,140" stroke="rgba(168,124,38,0.3)" fill="none" /></svg>');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+.equipment-slot {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.equipment-slot:hover {
+  background-color: rgba(168, 124, 38, 0.3);
+}
+
+.equipment-slot.head {
+  top: 10px;
+  left: calc(50% - 20px);
+}
+
+.equipment-slot.body {
+  top: 60px;
+  left: calc(50% - 20px);
+}
+
+.equipment-slot.right-hand {
+  top: 60px;
+  left: calc(50% + 30px);
+}
+
+.equipment-slot.left-hand {
+  top: 60px;
+  left: calc(50% - 70px);
+}
+
+.equipment-slot.hands {
+  top: 110px;
+  left: calc(50% - 20px);
+}
+
+.equipment-slot.feet {
+  top: 160px;
+  left: calc(50% - 20px);
+}
+
+.equipment-slot.neck {
+  top: 35px;
+  left: calc(50% - 20px);
+}
+
+.equipment-slot.ring1 {
+  top: 110px;
+  left: calc(50% - 70px);
+}
+
+.equipment-slot.ring2 {
+  top: 110px;
+  left: calc(50% + 30px);
+}
+
+.slot-icon, .item-icon {
+  font-size: 20px;
+}
+
+/* Inventory display */
+.inventory-display {
+  flex: 1;
+  border-top: 1px solid var(--border-color);
+  padding-top: 10px;
+  overflow-y: auto;
+}
+
+h3 {
+  color: var(--primary-color);
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  text-align: center;
+}
+
+.generate-item-btn {
+  background-color: var(--primary-color);
+  color: var(--text-color);
+  border: none;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: inherit;
+  display: block;
+  margin: 0 auto 10px;
+}
+
+.generate-item-btn:hover {
+  background-color: var(--highlight-color);
+  color: var(--darker-bg);
+}
+
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+
+.inventory-item {
+  width: 40px;
+  height: 40px;
+  background-color: rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.inventory-item:hover {
+  background-color: rgba(168, 124, 38, 0.3);
+}
+
+.inventory-item.selected {
+  border: 1px solid var(--highlight-color);
+  box-shadow: 0 0 5px var(--highlight-color);
+}
+
+/* Tooltips */
+.tooltip {
+  display: none;
+  position: absolute;
+  background-color: var(--dark-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  padding: 8px;
+  z-index: 100;
+  width: 150px;
+  pointer-events: none;
+}
+
+.equipment-slot:hover .tooltip,
+.inventory-item:hover .tooltip {
+  display: block;
+  top: -5px;
+  left: 45px;
+}
+
+.item-name {
+  color: var(--highlight-color);
+  font-weight: bold;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.item-stats {
+  font-size: 11px;
+}
+
+.item-stats div {
+  margin-bottom: 2px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 800px) {
+  .stats-widget {
+    flex-direction: column;
+    width: 100%;
+    height: auto;
+  }
+
+  .stats-panel, .equipment-panel {
+    width: 100%;
+    flex: none;
+  }
+}

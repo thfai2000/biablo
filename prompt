@@ -24,6 +24,8 @@ The player can learn the magics (e.g. shooting fire-ball, ice-lanser) to attach 
 
 
 
+Please refactor the StatsWidget which is Diablo-like style. You can also modify the all related codes (e.g. players, game).
+That widget allows player to increase their stats when they level-up. The widget size is about is long rectangle. on left-hand size, there is a section shows the list of stats (e.g. strength..) , On the right hand side, there is a section shows the bag inventory and a body diagram. On the body diagram, there are slots which allows adding armor, weapon, helmt...so on. The ui should be user friendly for changing the equipements (come from the bag). 
+Draw some icon (pixel) to indicate the stats and slots...
 
-
-Refactor the "Stats Popup" into a object class (named like Stats Widget). That widget allows player to increase their stats when they level-up. The widget size is about is long rectangle. Left-hand size shows the list of stats (e.g. strength..) , right hand side shows the bag inventory and a body diagram. On the body diagram, there are slots which allows adding armor, weapon, helmt...so on.
+IMPORTANT: Limit your thinking and make your output not over 10K tokens!
