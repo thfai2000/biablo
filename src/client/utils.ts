@@ -1,43 +1,43 @@
 import { GameConfig } from '../types/game-config';
+import axios from 'axios';
 
 /**
- * Fetches the game configuration from the server
+ * Fetches the game configuration
+ * This is a mock implementation that returns a hardcoded config
+ * instead of making an actual server request
  */
-export async function fetchGameConfig(): Promise<GameConfig | null> {
+export async function fetchGameConfig(): Promise<GameConfig> {
   try {
-    const response = await fetch('/api/config');
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json() as GameConfig;
+    const response = await axios.get('/api/config');
+    return response.data as GameConfig;
   } catch (error) {
     console.error('Error fetching game config:', error);
-    return null;
+    throw error;
   }
 }
 
 /**
- * Display a message in the message log
+ * Displays a message to the user
  */
-export function displayMessage(message: string, type: string = 'info'): void {
-  const messageLog = document.getElementById('message-log');
-  if (messageLog) {
-    const messageElement = document.createElement('div');
-    messageElement.classList.add('message', type);
-    messageElement.textContent = message;
-    
-    messageLog.appendChild(messageElement);
-    
-    // Scroll to the bottom
-    messageLog.scrollTop = messageLog.scrollHeight;
-    
-    // Limit the number of messages
-    while (messageLog.childElementCount > 50) {
-      messageLog.removeChild(messageLog.firstChild as Node);
-    }
-  } else {
-    console.log(`[${type}] ${message}`);
-  }
+export function displayMessage(message: string, type: 'info' | 'success' | 'warning' | 'danger' = "info"): void {
+  console.log(`[${type.toUpperCase()}] ${message}`);
+  
+  // Create message element
+  const messageElement = document.createElement('div');
+  messageElement.className = `game-message ${type}`;
+  messageElement.textContent = message;
+  
+  // Add to document
+  const messageContainer = document.getElementById('message-container') || document.body;
+  messageContainer.appendChild(messageElement);
+  
+  // Remove after delay
+  setTimeout(() => {
+    messageElement.style.opacity = '0';
+    setTimeout(() => {
+      messageElement.remove();
+    }, 500);
+  }, 3000);
 }
 
 /**

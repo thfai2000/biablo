@@ -20,6 +20,44 @@ interface FloorChangeResult {
   direction?: 'up' | 'down';
 }
 
+interface PlayerStats {
+  maxHealth: number;
+  currentHealth: number;
+  maxMana: number;
+  currentMana: number;
+  strength: number;
+  dexterity: number;
+  intelligence: number;
+  level: number;
+  experience: number;
+  nextLevelExp: number;
+}
+
+interface Item {
+  id: string;
+  name: string;
+  type: 'weapon' | 'armor' | 'helmet' | 'boots' | 'potion' | 'scroll' | 'misc';
+  value: number;
+  quantity: number;
+  stats?: {
+    damage?: number;
+    defense?: number;
+    healthBonus?: number;
+    manaBonus?: number;
+    strengthBonus?: number;
+    dexterityBonus?: number;
+    intelligenceBonus?: number;
+  };
+  description?: string;
+}
+
+interface Equipment {
+  weapon: Item | null;
+  armor: Item | null;
+  helmet: Item | null;
+  boots: Item | null;
+}
+
 export class Player {
   private config: any;
   public x: number;
@@ -32,15 +70,13 @@ export class Player {
   public showMinimap: boolean;
   private minimapSize: number;
   private minimapScale: number;
+  public size: number; // Add missing property for collision detection
 
-  // New stats properties
-  private currentHealth: number;
-  private maxHealth: number;
-  private currentMana: number;
-  private maxMana: number;
-  private experience: number;
-  private level: number;
-  private experienceToNextLevel: number;
+  // Consolidated player stats
+  private stats: PlayerStats;
+  private inventory: Item[];
+  private equipment: Equipment;
+  private maxInventorySize: number;
 
   constructor(config: GameConfig) {
     this.config = config.player;
@@ -48,15 +84,7 @@ export class Player {
     this.y = 0;
     this.currentFloor = 0;
     this.moveSpeed = this.config.initialStats.baseSpeed;
-
-    // Initialize stats
-    this.currentHealth = this.config.initialStats.health;
-    this.maxHealth = this.config.initialStats.health;
-    this.currentMana = this.config.initialStats.mana;
-    this.maxMana = this.config.initialStats.mana;
-    this.experience = 0;
-    this.level = 1;
-    this.experienceToNextLevel = 100; // Base XP needed for level 2
+    this.size = 24; // Default size for collision detection
     
     // Set up keyboard controls
     this.keys = {
@@ -76,11 +104,70 @@ export class Player {
     this.showMinimap = true; // Default to showing the minimap
     this.minimapSize = 150;  // Size of the minimap in pixels
     this.minimapScale = 0.2; // Scale factor for the minimap
+
+    // Initialize consolidated stats
+    this.stats = {
+      maxHealth: this.config.initialStats.health,
+      currentHealth: this.config.initialStats.health,
+      maxMana: this.config.initialStats.mana,
+      currentMana: this.config.initialStats.mana,
+      strength: this.config.initialStats.strength,
+      dexterity: this.config.initialStats.dexterity,
+      intelligence: this.config.initialStats.intelligence,
+      level: 1,
+      experience: 0,
+      nextLevelExp: 100
+    };
+    
+    this.inventory = [];
+    this.equipment = {
+      weapon: null,
+      armor: null,
+      helmet: null,
+      boots: null
+    };
+    this.maxInventorySize = 20;
     
     this._setupInput();
-
-    // Update status bars initially
     this.updateStatusBars();
+    
+    // Add some starter items
+    this.addItem({
+      id: 'wooden-sword',
+      name: 'Wooden Sword',
+      type: 'weapon',
+      value: 5,
+      quantity: 1,
+      stats: {
+        damage: 3
+      },
+      description: 'A simple wooden sword.'
+    });
+    
+    this.addItem({
+      id: 'leather-armor',
+      name: 'Leather Armor',
+      type: 'armor',
+      value: 10,
+      quantity: 1,
+      stats: {
+        defense: 2
+      },
+      description: 'Basic leather armor.'
+    });
+    
+    this.addItem({
+      id: 'health-potion',
+      name: 'Health Potion',
+      type: 'potion',
+      value: 5,
+      quantity: 3,
+      description: 'Restores 25 health points.'
+    });
+    
+    // Equip starter items
+    this.equipItem('wooden-sword');
+    this.equipItem('leather-armor');
   }
 
   private _setupInput(): void {
@@ -105,6 +192,7 @@ export class Player {
         case ' ':
         case 'Enter':
           this.keys.action = true;
+          (window as any).lastKeyPressed = e.key;
           break;
         case 'm': // Add key to toggle minimap
           this.keys.toggleMap = true;
@@ -134,6 +222,7 @@ export class Player {
         case ' ':
         case 'Enter':
           this.keys.action = false;
+          (window as any).lastKeyPressed = null;
           break;
         case 'm':
           this.keys.toggleMap = false;
@@ -147,65 +236,74 @@ export class Player {
     const healthBar = document.querySelector('.health-bar .stat-bar-fill') as HTMLElement;
     const healthText = document.querySelector('.health-bar .stat-bar-text') as HTMLElement;
     if (healthBar && healthText) {
-      const healthPercent = (this.currentHealth / this.maxHealth) * 100;
+      const healthPercent = (this.stats.currentHealth / this.stats.maxHealth) * 100;
       healthBar.style.width = `${healthPercent}%`;
-      healthText.textContent = `${this.currentHealth}/${this.maxHealth}`;
+      healthText.textContent = `${this.stats.currentHealth}/${this.stats.maxHealth}`;
     }
 
     // Update mana bar
     const manaBar = document.querySelector('.mana-bar .stat-bar-fill') as HTMLElement;
     const manaText = document.querySelector('.mana-bar .stat-bar-text') as HTMLElement;
     if (manaBar && manaText) {
-      const manaPercent = (this.currentMana / this.maxMana) * 100;
+      const manaPercent = (this.stats.currentMana / this.stats.maxMana) * 100;
       manaBar.style.width = `${manaPercent}%`;
-      manaText.textContent = `${this.currentMana}/${this.maxMana}`;
+      manaText.textContent = `${this.stats.currentMana}/${this.stats.maxMana}`;
     }
 
     // Update experience bar
     const expBar = document.querySelector('.exp-bar .stat-bar-fill') as HTMLElement;
     const expText = document.querySelector('.exp-bar .stat-bar-text') as HTMLElement;
     if (expBar && expText) {
-      const expPercent = (this.experience / this.experienceToNextLevel) * 100;
+      const expPercent = (this.stats.experience / this.stats.nextLevelExp) * 100;
       expBar.style.width = `${expPercent}%`;
-      expText.textContent = `${this.experience}/${this.experienceToNextLevel}`;
+      expText.textContent = `${this.stats.experience}/${this.stats.nextLevelExp}`;
     }
   }
 
   public gainExperience(amount: number): void {
-    this.experience += amount;
-    while (this.experience >= this.experienceToNextLevel) {
+    this.stats.experience += amount;
+    while (this.stats.experience >= this.stats.nextLevelExp) {
       this.levelUp();
     }
     this.updateStatusBars();
   }
 
   private levelUp(): void {
-    this.level++;
-    this.experience -= this.experienceToNextLevel;
+    this.stats.level++;
+    this.stats.experience -= this.stats.nextLevelExp;
     // Increase XP needed for next level by 50%
-    this.experienceToNextLevel = Math.floor(this.experienceToNextLevel * 1.5);
+    this.stats.nextLevelExp = Math.floor(this.stats.nextLevelExp * 1.5);
+    
+    // Increase stats
+    this.stats.maxHealth += 10;
+    this.stats.maxMana += 5;
+    this.stats.strength += 2;
+    this.stats.dexterity += 1;
+    this.stats.intelligence += 1;
     
     // Restore HP and MP on level up
-    this.currentHealth = this.maxHealth;
-    this.currentMana = this.maxMana;
+    this.stats.currentHealth = this.stats.maxHealth;
+    this.stats.currentMana = this.stats.maxMana;
     
-    displayMessage(`Level up! You are now level ${this.level}`, 'info');
+    displayMessage(`Level up! You are now level ${this.stats.level}`, 'info');
     displayMessage(`You have ${this.config.levelUpPoints} stat points to spend!`, 'info');
   }
 
-  public takeDamage(amount: number): void {
-    this.currentHealth = Math.max(0, this.currentHealth - amount);
+  public takeDamage(amount: number): boolean {
+    this.stats.currentHealth = Math.max(0, this.stats.currentHealth - amount);
     this.updateStatusBars();
     
-    if (this.currentHealth === 0) {
+    if (this.stats.currentHealth === 0) {
       displayMessage('You have died!', 'danger');
       // Handle death later
+      return true; // Player died
     }
+    return false; // Player still alive
   }
 
   public useMana(amount: number): boolean {
-    if (this.currentMana >= amount) {
-      this.currentMana -= amount;
+    if (this.stats.currentMana >= amount) {
+      this.stats.currentMana -= amount;
       this.updateStatusBars();
       return true;
     }
@@ -213,12 +311,12 @@ export class Player {
   }
 
   public heal(amount: number): void {
-    this.currentHealth = Math.min(this.maxHealth, this.currentHealth + amount);
+    this.stats.currentHealth = Math.min(this.stats.maxHealth, this.stats.currentHealth + amount);
     this.updateStatusBars();
   }
 
   public restoreMana(amount: number): void {
-    this.currentMana = Math.min(this.maxMana, this.currentMana + amount);
+    this.stats.currentMana = Math.min(this.stats.maxMana, this.stats.currentMana + amount);
     this.updateStatusBars();
   }
 
@@ -449,5 +547,278 @@ export class Player {
     ctx.strokeStyle = 'white';
     ctx.lineWidth = 2;
     ctx.strokeRect(minimapX, minimapY, mapSize, mapSize);
+  }
+
+  setupEventListeners() {
+    // Movement controls
+    window.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'w':
+        case 'W':
+        case 'ArrowUp':
+          this.keys.up = true;
+          break;
+        case 's':
+        case 'S':
+        case 'ArrowDown':
+          this.keys.down = true;
+          break;
+        case 'a':
+        case 'A':
+        case 'ArrowLeft':
+          this.keys.left = true;
+          break;
+        case 'd':
+        case 'D':
+        case 'ArrowRight':
+          this.keys.right = true;
+          break;
+        case ' ':
+        case 'Enter':
+          // Store last key press for stairs interaction
+          (window as any).lastKeyPressed = e.key;
+          break;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      switch (e.key) {
+        case 'w':
+        case 'W':
+        case 'ArrowUp':
+          this.keys.up = false;
+          break;
+        case 's':
+        case 'S':
+        case 'ArrowDown':
+          this.keys.down = false;
+          break;
+        case 'a':
+        case 'A':
+        case 'ArrowLeft':
+          this.keys.left = false;
+          break;
+        case 'd':
+        case 'D':
+        case 'ArrowRight':
+          this.keys.right = false;
+          break;
+        case ' ':
+        case 'Enter':
+          // Reset last key pressed
+          (window as any).lastKeyPressed = null;
+          break;
+      }
+    });
+  }
+
+  checkCollision(map: number[][], x: number, y: number): boolean {
+    // Check if player would collide with a wall
+    const tileSize = 32;
+    
+    // Check top-left corner
+    let tileX = Math.floor(x / tileSize);
+    let tileY = Math.floor(y / tileSize);
+    
+    if (tileY < 0 || tileX < 0 || tileY >= map.length || tileX >= map[0].length || map[tileY][tileX] === 0) return true; // Wall
+    
+    // Check top-right corner
+    tileX = Math.floor((x + this.size) / tileSize);
+    tileY = Math.floor(y / tileSize);
+    
+    if (tileY < 0 || tileX < 0 || tileY >= map.length || tileX >= map[0].length || map[tileY][tileX] === 0) return true; // Wall
+    
+    // Check bottom-left corner
+    tileX = Math.floor(x / tileSize);
+    tileY = Math.floor((y + this.size) / tileSize);
+    
+    if (tileY < 0 || tileX < 0 || tileY >= map.length || tileX >= map[0].length || map[tileY][tileX] === 0) return true; // Wall
+    
+    // Check bottom-right corner
+    tileX = Math.floor((x + this.size) / tileSize);
+    tileY = Math.floor((y + this.size) / tileSize);
+    
+    if (tileY < 0 || tileX < 0 || tileY >= map.length || tileX >= map[0].length || map[tileY][tileX] === 0) return true; // Wall
+    
+    return false;
+  }
+  
+  checkStairsInteraction(): boolean {
+    return (
+      document.activeElement === document.body && // Make sure no input is focused
+      (window as any).lastKeyPressed && 
+      ((window as any).lastKeyPressed === ' ' || 
+       (window as any).lastKeyPressed === 'Enter')
+    );
+  }
+  
+  // Inventory and Equipment methods
+  addItem(item: Item): boolean {
+    // Check if inventory is full
+    if (this.inventory.length >= this.maxInventorySize) {
+      return false;
+    }
+    
+    // Check if similar item exists in inventory
+    const existingItemIndex = this.inventory.findIndex(i => i.id === item.id);
+    
+    if (existingItemIndex >= 0) {
+      // Increase quantity of existing item
+      this.inventory[existingItemIndex].quantity += item.quantity;
+      return true;
+    } else {
+      // Add new item to inventory
+      this.inventory.push({ ...item });
+      return true;
+    }
+  }
+  
+  removeItem(itemId: string, quantity: number = 1): boolean {
+    const itemIndex = this.inventory.findIndex(item => item.id === itemId);
+    
+    if (itemIndex === -1) {
+      return false;
+    }
+    
+    const item = this.inventory[itemIndex];
+    
+    if (item.quantity <= quantity) {
+      // Remove entire stack
+      this.inventory.splice(itemIndex, 1);
+    } else {
+      // Reduce quantity
+      item.quantity -= quantity;
+    }
+    
+    return true;
+  }
+  
+  equipItem(itemId: string): boolean {
+    const itemIndex = this.inventory.findIndex(item => item.id === itemId);
+    
+    if (itemIndex === -1) {
+      return false;
+    }
+    
+    const item = this.inventory[itemIndex];
+    
+    if (!['weapon', 'armor', 'helmet', 'boots'].includes(item.type)) {
+      return false;
+    }
+    
+    // Unequip current item if present
+    if (this.equipment[item.type as keyof Equipment]) {
+      // Add current equipped item back to inventory
+      this.addItem(this.equipment[item.type as keyof Equipment]!);
+    }
+    
+    // Equip new item
+    this.equipment[item.type as keyof Equipment] = { ...item };
+    
+    // Remove from inventory
+    this.removeItem(itemId);
+    
+    // Apply stat bonuses
+    this.updateStats();
+    
+    return true;
+  }
+  
+  unequipItem(slot: keyof Equipment): boolean {
+    const equippedItem = this.equipment[slot];
+    
+    if (!equippedItem) {
+      return false;
+    }
+    
+    // Check if inventory has space
+    if (this.inventory.length >= this.maxInventorySize) {
+      return false;
+    }
+    
+    // Add item back to inventory
+    this.addItem(equippedItem);
+    
+    // Remove from equipment
+    this.equipment[slot] = null;
+    
+    // Update stats
+    this.updateStats();
+    
+    return true;
+  }
+  
+  updateStats(): void {
+    // Reset stats to base values
+    this.stats.maxHealth = 100 + (this.stats.level - 1) * 10;
+    this.stats.maxMana = 50 + (this.stats.level - 1) * 5;
+    this.stats.strength = 10 + (this.stats.level - 1) * 2;
+    this.stats.dexterity = 8 + (this.stats.level - 1);
+    this.stats.intelligence = 5 + (this.stats.level - 1);
+    
+    // Apply equipment bonuses
+    Object.values(this.equipment).forEach(item => {
+      if (item && item.stats) {
+        if (item.stats.healthBonus) this.stats.maxHealth += item.stats.healthBonus;
+        if (item.stats.manaBonus) this.stats.maxMana += item.stats.manaBonus;
+        if (item.stats.strengthBonus) this.stats.strength += item.stats.strengthBonus;
+        if (item.stats.dexterityBonus) this.stats.dexterity += item.stats.dexterityBonus;
+        if (item.stats.intelligenceBonus) this.stats.intelligence += item.stats.intelligenceBonus;
+      }
+    });
+    
+    // Ensure current values don't exceed max
+    if (this.stats.currentHealth > this.stats.maxHealth) {
+      this.stats.currentHealth = this.stats.maxHealth;
+    }
+    
+    if (this.stats.currentMana > this.stats.maxMana) {
+      this.stats.currentMana = this.stats.maxMana;
+    }
+  }
+  
+  useItem(itemId: string): boolean {
+    const itemIndex = this.inventory.findIndex(item => item.id === itemId);
+    
+    if (itemIndex === -1) {
+      return false;
+    }
+    
+    const item = this.inventory[itemIndex];
+    
+    if (item.type === 'potion') {
+      // Apply potion effects
+      if (item.id === 'health-potion') {
+        this.stats.currentHealth = Math.min(this.stats.currentHealth + 25, this.stats.maxHealth);
+        this.updateStatusBars();
+      } else if (item.id === 'mana-potion') {
+        this.stats.currentMana = Math.min(this.stats.currentMana + 25, this.stats.maxMana);
+        this.updateStatusBars();
+      }
+      
+      // Remove used potion
+      this.removeItem(itemId, 1);
+      return true;
+    }
+    
+    return false;
+  }
+  
+  // Methods for UI access
+  getStats(): PlayerStats {
+    return { ...this.stats };
+  }
+  
+  getInventory(): Item[] {
+    return [...this.inventory];
+  }
+  
+  getEquipment(): Equipment {
+    return {
+      weapon: this.equipment.weapon ? { ...this.equipment.weapon } : null,
+      armor: this.equipment.armor ? { ...this.equipment.armor } : null,
+      helmet: this.equipment.helmet ? { ...this.equipment.helmet } : null,
+      boots: this.equipment.boots ? { ...this.equipment.boots } : null
+    };
   }
 }
