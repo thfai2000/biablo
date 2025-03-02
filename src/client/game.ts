@@ -12,6 +12,9 @@ interface FloorData {
   map: number[][];
   upStairsPos: Position | null;
   downStairsPos: Position | null;
+  enemyLevel?: number;
+  enemyDensity?: number;
+  treasureChestDensity?: number;
 }
 
 interface Assets {
@@ -145,6 +148,14 @@ export class Game {
       this.floors[level] = generator.generate();
     }
     
+    // Add enemy and treasure density to floor data
+    const floorConfig = this.config.floors.find(floor => floor.level === level);
+    if (floorConfig) {
+      this.floors[level].enemyLevel = floorConfig.enemyLevel;
+      this.floors[level].enemyDensity = floorConfig.enemyDensity;
+      this.floors[level].treasureChestDensity = floorConfig.treasureChestDensity;
+    }
+    
     displayMessage(`Generated floor ${level}`, 'info');
   }
   
@@ -257,7 +268,7 @@ export class Game {
     const floorData = this.floors[this.currentFloor];
     if (!floorData || !floorData.map || !this.player) return;
     
-    const { map, upStairsPos, downStairsPos } = floorData;
+    const { map, upStairsPos, downStairsPos, enemyLevel, enemyDensity, treasureChestDensity } = floorData;
     
     // Calculate visible tile range based on camera position
     const startCol = Math.floor(this.cameraX / this.tileSize);

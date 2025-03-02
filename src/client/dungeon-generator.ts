@@ -18,6 +18,9 @@ interface DungeonResult {
   map: number[][];
   upStairsPos: Position | null;
   downStairsPos: Position | null;
+  enemyLevel?: number;
+  enemyDensity?: number;
+  treasureChestDensity?: number;
 }
 
 export class DungeonGenerator {
@@ -119,11 +122,19 @@ export class DungeonGenerator {
       this.map[this.downStairsPos.y][this.downStairsPos.x] = 3; // Down stairs
     }
     
-    return {
+    // Add enemy and treasure density to dungeon result
+    const floorConfig = this.config.floors.find(floor => floor.level === this.level);
+    const result: DungeonResult = {
       map: this.map,
       upStairsPos: this.upStairsPos,
       downStairsPos: this.downStairsPos
     };
+    if (floorConfig) {
+      result.enemyLevel = floorConfig.enemyLevel;
+      result.enemyDensity = floorConfig.enemyDensity;
+      result.treasureChestDensity = floorConfig.treasureChestDensity;
+    }
+    return result;
   }
   
   private _createRoom(room: Room): void {
