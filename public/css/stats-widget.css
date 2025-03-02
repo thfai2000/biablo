@@ -18,7 +18,8 @@
   width: 800px;
   height: 500px;
   border: 2px solid var(--border-color);
-  font-family: 'Cinzel', serif;
+  font-family: Arial, sans-serif;
+  position: relative;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
   overflow: hidden;
 }
@@ -149,16 +150,27 @@ h2 {
   position: absolute;
   width: 40px;
   height: 40px;
-  background-color: rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--border-color);
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #444;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: opacity 0.2s ease-in-out, border-color 0.2s ease-in-out;
+}
+
+.equipment-slot.empty {
+  opacity: 0.4;
+}
+
+.equipment-slot.occupied {
+  opacity: 1;
+  border-color: #888;
 }
 
 .equipment-slot:hover {
-  background-color: rgba(168, 124, 38, 0.3);
+  opacity: 0.8;
+  border-color: #666;
 }
 
 .equipment-slot.head {
@@ -208,6 +220,8 @@ h2 {
 
 .slot-icon, .item-icon {
   font-size: 20px;
+  text-align: center;
+  user-select: none;
 }
 
 /* Inventory display */
@@ -243,64 +257,106 @@ h3 {
 
 .inventory-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, 40px);
   gap: 5px;
+  margin-top: 10px;
+  padding: 10px;
 }
 
-.inventory-item {
+.inventory-slot {
   width: 40px;
   height: 40px;
   background-color: rgba(0, 0, 0, 0.5);
   border: 1px solid var(--border-color);
+  position: relative;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  position: relative;
+  transition: background-color 0.2s;
 }
 
-.inventory-item:hover {
+.inventory-slot:hover {
   background-color: rgba(168, 124, 38, 0.3);
 }
 
-.inventory-item.selected {
-  border: 1px solid var(--highlight-color);
+.inventory-slot.selected {
+  border-color: var(--highlight-color);
   box-shadow: 0 0 5px var(--highlight-color);
 }
 
-/* Tooltips */
-.tooltip {
-  display: none;
+.inventory-slot .item-icon {
+  font-size: 20px;
+}
+
+.inventory-slot .item-quantity {
   position: absolute;
-  background-color: var(--dark-bg);
+  bottom: 2px;
+  right: 2px;
+  font-size: 10px;
+  color: #aaa;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 1px 3px;
+  border-radius: 3px;
+}
+
+/* Tooltip styles */
+.tooltip {
+  position: absolute;
+  display: none;
+  background-color: rgba(0, 0, 0, 0.9);
   border: 1px solid var(--border-color);
+  padding: 5px;
+  border-radius: 3px;
   color: var(--text-color);
-  padding: 8px;
-  z-index: 100;
-  width: 150px;
-  pointer-events: none;
-}
-
-.equipment-slot:hover .tooltip,
-.inventory-item:hover .tooltip {
-  display: block;
-  top: -5px;
-  left: 45px;
-}
-
-.item-name {
-  color: var(--highlight-color);
-  font-weight: bold;
-  margin-bottom: 5px;
   font-size: 12px;
+  z-index: 1000;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
-.item-stats {
-  font-size: 11px;
+.inventory-slot:hover .tooltip {
+  display: block;
+  left: 100%;
+  top: 0;
+  margin-left: 5px;
 }
 
-.item-stats div {
-  margin-bottom: 2px;
+/* Equipment section styles */
+.equipment-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, 40px);
+  gap: 5px;
+  margin-bottom: 20px;
+}
+
+/* Right-click context styles */
+.inventory-slot.usable {
+  cursor: context-menu;
+}
+
+.inventory-slot.usable:hover {
+  background-color: rgba(76, 175, 80, 0.3);
+}
+
+.inventory-section {
+  margin-top: 20px;
+  padding-top: 10px;
+  border-top: 1px solid #444;
+}
+
+.inventory-cell {
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: border-color 0.2s ease-in-out;
+}
+
+.inventory-cell:hover {
+  border-color: #888;
 }
 
 /* Responsive adjustments */

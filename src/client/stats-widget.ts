@@ -1,13 +1,38 @@
 import { Player } from './player';
+import { STAT_ICONS, SLOT_ICONS } from './icons';
+import { EquipmentSlot } from './item';
 
-// Define our own simple icons since we can't import them
-const STAT_ICONS = {
-  strength: '💪',
-  dexterity: '🏃',
-  intelligence: '🧠'
+// Define grid configuration
+const INVENTORY_GRID = {
+  rows: 4,
+  cols: 4,
+  cellSize: 40,
+  padding: 5
 };
 
-// Interface for storing UI-specific data per inventory item
+// Add necessary type definitions
+interface PlayerStats {
+  maxHealth: number;
+  currentHealth: number;
+  maxMana: number;
+  currentMana: number;
+  strength: number;
+  dexterity: number;
+  intelligence: number;
+  level: number;
+  experience: number;
+  nextLevelExp: number;
+  [key: string]: number;
+}
+
+interface Equipment {
+  [key: string]: any;
+  weapon: any;
+  armor: any;
+  helmet: any;
+  boots: any;
+}
+
 interface ButtonBounds {
   x: number;
   y: number;
@@ -15,344 +40,379 @@ interface ButtonBounds {
   height: number;
 }
 
+interface GridCell {
+  x: number;
+  y: number;
+  item: any | null;
+}
+
+/**
+ * Represents a widget that displays player stats, equipment, and inventory.
+ */
 export class StatsWidget {
+  /**
+   * The player whose stats are being displayed.
+   */
   private player: Player | null = null;
+
+  /**
+   * The currently selected inventory item.
+   */
   private selectedInventoryItem: any | null = null;
+
+  /**
+   * Indicates whether the widget is currently visible.
+   */
   private isVisible: boolean = false;
+
+  /**
+   * A map of button bounds for inventory items.
+   */
   private buttonBoundsMap: Map<string, ButtonBounds> = new Map();
-  
+
+  /**
+   * The grid-based inventory system.
+   */
+  private inventoryGrid: GridCell[][] = [];
+
+  /**
+   * The timestamp of the last right-click event.
+   */
+  private lastRightClickTime: number = 0;
+
+  private lastClickTime: number = 0;
+  private lastClickedCell: { row: number, col: number } | null = null;
+  private doubleClickThreshold: number = 300; // 300ms threshold for double-click
+
+  /**
+   * Initializes a new instance of the StatsWidget class.
+   */
   constructor() {
     this.isVisible = false;
+    this.initializeGrid();
   }
 
+  /**
+   * Initializes the inventory grid.
+   */
+  private initializeGrid() {
+    this.inventoryGrid = Array(INVENTORY_GRID.rows).fill(null).map(() => 
+      Array(INVENTORY_GRID.cols).fill(null).map(() => ({
+        x: 0,
+        y: 0,
+        item: null
+      }))
+    );
+  }
+
+  /**
+   * Sets the player whose stats are to be displayed.
+   * @param player - The player whose stats are to be displayed.
+   */
   setPlayer(player: Player): void {
     this.player = player;
+    this.updateInventoryGrid();
   }
-  
+
+  /**
+   * Updates the inventory grid based on the player's inventory.
+   */
+  private updateInventoryGrid(): void {
+    if (!this.player) return;
+    
+    const inventory = this.player.getInventory();
+    this.initializeGrid();
+    
+    inventory.forEach((item, index) => {
+      const row = Math.floor(index / INVENTORY_GRID.cols);
+      const col = index % INVENTORY_GRID.cols;
+      if (row < INVENTORY_GRID.rows && col < INVENTORY_GRID.cols) {
+        this.inventoryGrid[row][col].item = item;
+      }
+    });
+  }
+
+  /**
+   * Checks if the widget is currently visible.
+   * @returns True if the widget is visible, otherwise false.
+   */
   isCurrentlyVisible(): boolean {
     return this.isVisible;
   }
-  
+
+  /**
+   * Toggles the visibility of the widget.
+   */
   toggle(): void {
     this.isVisible = !this.isVisible;
   }
-  
+
+  /**
+   * Renders the widget on the given canvas context.
+   * @param ctx - The canvas rendering context.
+   * @param canvas - The canvas element.
+   */
   renderCanvas(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
     if (!this.isVisible || !this.player) return;
-    
-    const popupX = canvas.width / 2 - 300;
-    const popupY = canvas.height / 2 - 200;
-    const popupWidth = 600;
-    const popupHeight = 400;
-    
-    // Semi-transparent background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+
+    // Add a semi-transparent overlay for the entire canvas
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Popup panel with background
-    ctx.fillStyle = '#333';
+
+    // Calculate dimensions based on content
+    const statsHeight = Object.keys(STAT_ICONS).length * 30 + 60; // Stats + padding
+    const equipmentHeight = INVENTORY_GRID.cellSize * 4 + INVENTORY_GRID.padding * 5; // Equipment slots
+    const inventoryHeight = (INVENTORY_GRID.cellSize + INVENTORY_GRID.padding) * INVENTORY_GRID.rows;
+    const contentHeight = Math.max(statsHeight, equipmentHeight + inventoryHeight + 60); // Add padding for titles
+
+    const popupWidth = 600; // Wider to accommodate equipment layout
+    const popupHeight = contentHeight + 80; // Add padding for top/bottom
+    const popupX = (canvas.width - popupWidth) / 2;
+    const popupY = (canvas.height - popupHeight) / 2;
+
+    // Draw widget background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
     ctx.fillRect(popupX, popupY, popupWidth, popupHeight);
-    
-    // Popup border
-    ctx.strokeStyle = '#gold';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#666';
     ctx.strokeRect(popupX, popupY, popupWidth, popupHeight);
-    
+
     // Title
-    ctx.fillStyle = '#gold';
-    ctx.font = 'bold 20px Arial';
+    ctx.fillStyle = '#aaa';
+    ctx.font = '20px Arial';
     ctx.textAlign = 'center';
-    ctx.fillText('Player Status', popupX + popupWidth / 2, popupY + 30);
-    ctx.textAlign = 'left';
-    
+    ctx.fillText('Character', popupX + popupWidth / 2, popupY + 30);
+
     // Left side: Stats
-    this.renderStatsSection(ctx, popupX + 20, popupY + 60);
+    this.renderStatsSection(ctx, popupX + 40, popupY + 60);
     
-    // Right side: Equipment and Inventory
-    this.renderEquipmentSection(ctx, popupX + popupWidth / 2, popupY + 60, popupWidth, canvas);
-    
-    // Close button
-    ctx.fillStyle = '#444';
-    ctx.fillRect(popupX + popupWidth - 80, popupY + 10, 60, 25);
-    ctx.strokeStyle = '#aaa';
-    ctx.strokeRect(popupX + popupWidth - 80, popupY + 10, 60, 25);
-    
-    ctx.fillStyle = 'white';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('Close', popupX + popupWidth - 50, popupY + 25);
-    ctx.textAlign = 'left';
+    // Right side: Equipment and Inventory (with more horizontal space)
+    this.renderEquipmentSection(ctx, popupX + popupWidth * 0.45, popupY + 60, popupWidth * 0.55, canvas);
   }
-  
+
+  /**
+   * Renders the stats section of the widget.
+   * @param ctx - The canvas rendering context.
+   * @param x - The x-coordinate of the stats section.
+   * @param y - The y-coordinate of the stats section.
+   */
   private renderStatsSection(ctx: CanvasRenderingContext2D, x: number, y: number): void {
     if (!this.player) return;
-    const playerStats = this.player.getStats();
-    
-    ctx.fillStyle = '#aaa';
+    const stats = this.player.getStats() as PlayerStats;
+
+    ctx.textAlign = 'left';
     ctx.font = '16px Arial';
-    ctx.fillText('Stats:', x, y);
     
-    ctx.fillStyle = 'white';
-    ctx.font = '14px Arial';
-    let currentY = y + 25;
-    
-    // Level and Experience
-    ctx.fillText(`Level: ${playerStats.level}`, x + 10, currentY);
-    currentY += 20;
-    
-    // Experience bar
-    const expBarWidth = 150;
-    const expBarHeight = 10;
-    const expProgress = Math.min(playerStats.experience / playerStats.nextLevelExp, 1);
-    
-    // Bar background
-    ctx.fillStyle = '#333';
-    ctx.fillRect(x + 10, currentY, expBarWidth, expBarHeight);
-    
-    // Progress bar
-    ctx.fillStyle = '#4CAF50';
-    ctx.fillRect(x + 10, currentY, expBarWidth * expProgress, expBarHeight);
-    
-    // Text
-    ctx.fillStyle = 'white';
-    ctx.fillText(`Experience: ${playerStats.experience}/${playerStats.nextLevelExp}`, x + 10, currentY + 25);
-    currentY += 40;
-    
-    // Core stats
-    const statNames = ['strength', 'dexterity', 'intelligence'];
-    statNames.forEach(statName => {
-      const icon = STAT_ICONS[statName as keyof typeof STAT_ICONS];
-      ctx.fillText(`${icon} ${statName.charAt(0).toUpperCase() + statName.slice(1)}: ${playerStats[statName as keyof typeof playerStats]}`, 
-                   x + 10, currentY);
-      currentY += 20;
+    Object.entries(STAT_ICONS).forEach(([stat, icon], index) => {
+      const yPos = y + index * 30;
+      ctx.fillStyle = '#aaa';
+      ctx.fillText(`${icon} ${stat.charAt(0).toUpperCase() + stat.slice(1)}: ${stats[stat]}`, x, yPos);
     });
-    
-    // Health and Mana bars
-    currentY += 10;
-    
-    // Health bar
-    const barWidth = 150;
-    const barHeight = 12;
-    const healthPercent = playerStats.currentHealth / playerStats.maxHealth;
-    
-    ctx.fillStyle = '#333';
-    ctx.fillRect(x + 10, currentY, barWidth, barHeight);
-    
-    ctx.fillStyle = '#e53935';
-    ctx.fillRect(x + 10, currentY, barWidth * healthPercent, barHeight);
-    
-    ctx.fillStyle = 'white';
-    ctx.font = '12px Arial';
-    ctx.fillText(`❤️ Health: ${playerStats.currentHealth}/${playerStats.maxHealth}`, x + 10, currentY + 25);
-    currentY += 35;
-    
-    // Mana bar
-    const manaPercent = playerStats.currentMana / playerStats.maxMana;
-    
-    ctx.fillStyle = '#333';
-    ctx.fillRect(x + 10, currentY, barWidth, barHeight);
-    
-    ctx.fillStyle = '#2196F3';
-    ctx.fillRect(x + 10, currentY, barWidth * manaPercent, barHeight);
-    
-    ctx.fillStyle = 'white';
-    ctx.fillText(`🔮 Mana: ${playerStats.currentMana}/${playerStats.maxMana}`, x + 10, currentY + 25);
   }
-  
+
+  /**
+   * Renders the equipment section of the widget.
+   * @param ctx - The canvas rendering context.
+   * @param x - The x-coordinate of the equipment section.
+   * @param y - The y-coordinate of the equipment section.
+   * @param popupWidth - The width of the popup.
+   * @param canvas - The canvas element.
+   */
   private renderEquipmentSection(ctx: CanvasRenderingContext2D, x: number, y: number, popupWidth: number, canvas: HTMLCanvasElement): void {
     if (!this.player) return;
+
+    const equipment = this.player.getEquipment() as Equipment;
+    const slotSize = INVENTORY_GRID.cellSize;
+    const padding = INVENTORY_GRID.padding;
     
-    ctx.fillStyle = '#aaa';
-    ctx.font = '16px Arial';
-    ctx.fillText('Equipment:', x, y);
-    
-    // Display equipment
-    ctx.fillStyle = 'white';
-    ctx.font = '14px Arial';
-    let currentY = y + 25;
-    
-    const equipment = this.player.getEquipment();
-    
-    // Equipment slots
-    const slots = [
-      { name: 'Weapon', item: equipment.weapon },
-      { name: 'Armor', item: equipment.armor },
-      { name: 'Helmet', item: equipment.helmet },
-      { name: 'Boots', item: equipment.boots }
-    ];
-    
-    slots.forEach(slot => {
-      ctx.fillText(`${slot.name}: ${slot.item ? slot.item.name : 'None'}`, x + 10, currentY);
-      currentY += 25;
-      
-      if (slot.item && slot.item.stats) {
-        const stats = slot.item.stats;
-        ctx.font = '12px Arial';
-        ctx.fillStyle = '#aaa';
-        
-        if (stats.damage) {
-          ctx.fillText(`Damage: +${stats.damage}`, x + 20, currentY);
-          currentY += 15;
-        }
-        if (stats.defense) {
-          ctx.fillText(`Defense: +${stats.defense}`, x + 20, currentY);
-          currentY += 15;
-        }
-        if (stats.strengthBonus) {
-          ctx.fillText(`Strength: +${stats.strengthBonus}`, x + 20, currentY);
-          currentY += 15;
-        }
-        if (stats.dexterityBonus) {
-          ctx.fillText(`Dexterity: +${stats.dexterityBonus}`, x + 20, currentY);
-          currentY += 15;
-        }
-        if (stats.intelligenceBonus) {
-          ctx.fillText(`Intelligence: +${stats.intelligenceBonus}`, x + 20, currentY);
-          currentY += 15;
-        }
-        
-        ctx.fillStyle = 'white';
-        ctx.font = '14px Arial';
-        currentY += 5;
+    // Calculate center position
+    const centerX = x;
+    const startY = y + 30;
+
+    // Layout configuration
+    const positions = {
+      [EquipmentSlot.HEAD]: { x: centerX + slotSize, y: startY },
+      [EquipmentSlot.NECK]: { x: centerX + slotSize * 2 + padding, y: startY },
+      [EquipmentSlot.RIGHT_HAND]: { x: centerX, y: startY + slotSize + padding },
+      [EquipmentSlot.BODY]: { x: centerX + slotSize + padding, y: startY + slotSize + padding },
+      [EquipmentSlot.LEFT_HAND]: { x: centerX + slotSize * 2 + padding * 2, y: startY + slotSize + padding },
+      [EquipmentSlot.HANDS]: { x: centerX, y: startY + (slotSize + padding) * 2 },
+      [EquipmentSlot.RING1]: { x: centerX + slotSize + padding, y: startY + (slotSize + padding) * 2 },
+      [EquipmentSlot.RING2]: { x: centerX + slotSize * 2 + padding * 2, y: startY + (slotSize + padding) * 2 },
+      [EquipmentSlot.FEET]: { x: centerX + slotSize + padding, y: startY + (slotSize + padding) * 3 }
+    };
+
+    // Draw equipment slots in the defined positions
+    Object.entries(SLOT_ICONS).forEach(([slot, icon]) => {
+      const position = positions[slot as EquipmentSlot];
+      if (position) {
+        this.renderEquipmentSlot(
+          ctx,
+          position.x,
+          position.y,
+          slot as EquipmentSlot,
+          icon,
+          equipment[slot]
+        );
       }
     });
-    
-    // Inventory header
-    currentY += 10;
+
+    // Inventory section
+    const inventoryY = startY + (slotSize + padding) * 4 + 40;
     ctx.fillStyle = '#aaa';
-    ctx.fillText('Inventory:', x, currentY);
-    currentY += 25;
-    
-    // Draw inventory
-    const inventory = this.player.getInventory();
-    
-    // Clear button bounds map before redrawing
-    this.buttonBoundsMap.clear();
-    
-    if (inventory.length === 0) {
-      ctx.fillStyle = '#aaa';
-      ctx.fillText('Empty', x + 10, currentY);
-    } else {
-      // Show only first 8 items to avoid overflow
-      const itemsToShow = inventory.slice(0, 8);
-      
-      itemsToShow.forEach((item, index) => {
-        const isSelected = item === this.selectedInventoryItem;
+    ctx.font = '16px Arial';
+    ctx.fillText('Inventory', x, inventoryY - 10);
+
+    this.renderInventoryGrid(ctx, x, inventoryY);
+  }
+
+  /**
+   * Renders the inventory grid.
+   * @param ctx - The canvas rendering context.
+   * @param x - The x-coordinate of the inventory grid.
+   * @param y - The y-coordinate of the inventory grid.
+   */
+  private renderInventoryGrid(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+    this.inventoryGrid.forEach((row, rowIndex) => {
+      row.forEach((cell, colIndex) => {
+        const cellX = x + colIndex * (INVENTORY_GRID.cellSize + INVENTORY_GRID.padding);
+        const cellY = y + rowIndex * (INVENTORY_GRID.cellSize + INVENTORY_GRID.padding);
         
-        // Highlight selected item
-        if (isSelected) {
-          ctx.fillStyle = '#444';
-          ctx.fillRect(x, currentY - 15, 200, 20);
-          ctx.fillStyle = '#ffcc00';
-        } else {
+        // Update cell positions for click detection
+        cell.x = cellX;
+        cell.y = cellY;
+
+        // Draw cell background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(cellX, cellY, INVENTORY_GRID.cellSize, INVENTORY_GRID.cellSize);
+        ctx.strokeStyle = '#666';
+        ctx.strokeRect(cellX, cellY, INVENTORY_GRID.cellSize, INVENTORY_GRID.cellSize);
+
+        if (cell.item) {
+          // Draw item icon or name
           ctx.fillStyle = 'white';
+          ctx.font = '14px Arial';
+          ctx.textAlign = 'center';
+          const icon = cell.item.icon || '📦';
+          ctx.fillText(icon, cellX + INVENTORY_GRID.cellSize / 2, cellY + INVENTORY_GRID.cellSize / 2);
+          
+          // Draw quantity if more than 1
+          if (cell.item.quantity > 1) {
+            ctx.fillStyle = '#aaa';
+            ctx.font = '12px Arial';
+            ctx.fillText(`x${cell.item.quantity}`, cellX + INVENTORY_GRID.cellSize - 10, cellY + INVENTORY_GRID.cellSize - 5);
+          }
         }
-        
-        ctx.fillText(`${item.name}${item.quantity > 1 ? ` (x${item.quantity})` : ''}`, x + 10, currentY);
-        
-        // Add button for using/equipping if there's room
-        if (item.type === 'potion' || ['weapon', 'armor', 'helmet', 'boots'].includes(item.type)) {
-          const buttonText = item.type === 'potion' ? 'Use' : 'Equip';
-          const buttonWidth = 60;
-          const buttonHeight = 20;
-          const buttonX = x + 180;
-          const buttonY = currentY - 15;
-          
-          // Button background
-          ctx.fillStyle = item.type === 'potion' ? '#4CAF50' : '#2196F3';
-          ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
-          
-          // Button text
-          ctx.fillStyle = 'white';
-          ctx.font = '12px Arial';
-          ctx.fillText(buttonText, buttonX + 20, buttonY + 14);
-          
-          // Store button position for click handling
-          this.buttonBoundsMap.set(item.id, { 
-            x: buttonX, 
-            y: buttonY, 
-            width: buttonWidth, 
-            height: buttonHeight 
-          });
-        }
-        
-        currentY += 25;
       });
+    });
+  }
+
+  /**
+   * Renders an equipment slot.
+   * @param ctx - The canvas rendering context.
+   * @param x - The x-coordinate of the equipment slot.
+   * @param y - The y-coordinate of the equipment slot.
+   * @param slot - The equipment slot.
+   * @param icon - The icon representing the slot.
+   * @param item - The item in the slot.
+   */
+  private renderEquipmentSlot(ctx: CanvasRenderingContext2D, x: number, y: number, slot: EquipmentSlot, icon: string, item: any): void {
+    // Draw slot background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(x, y, INVENTORY_GRID.cellSize, INVENTORY_GRID.cellSize);
+    
+    // Draw border with different style for empty vs occupied slots
+    ctx.strokeStyle = item ? '#888' : '#444';
+    ctx.strokeRect(x, y, INVENTORY_GRID.cellSize, INVENTORY_GRID.cellSize);
+
+    if (item) {
+      // Draw equipped item with full opacity
+      ctx.fillStyle = 'white';
+      ctx.font = '20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(item.icon || '📦', x + INVENTORY_GRID.cellSize / 2, y + INVENTORY_GRID.cellSize / 2);
       
-      if (inventory.length > 8) {
-        ctx.fillStyle = '#aaa';
-        ctx.fillText(`...and ${inventory.length - 8} more items`, x + 10, currentY);
-      }
+      // Draw a subtle highlight to show it's equipped
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.strokeRect(x + 1, y + 1, INVENTORY_GRID.cellSize - 2, INVENTORY_GRID.cellSize - 2);
+    } else {
+      // Draw empty slot icon with reduced opacity
+      ctx.fillStyle = 'rgba(102, 102, 102, 0.4)';
+      ctx.font = '20px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText(icon, x + INVENTORY_GRID.cellSize / 2, y + INVENTORY_GRID.cellSize / 2);
     }
   }
-  
-  handleCanvasClick(x: number, y: number, canvas: HTMLCanvasElement): void {
+
+  /**
+   * Handles click events on the canvas.
+   * @param x - The x-coordinate of the click.
+   * @param y - The y-coordinate of the click.
+   * @param canvas - The canvas element.
+   * @param isRightClick - Indicates if the click is a right-click.
+   */
+  handleCanvasClick(x: number, y: number, canvas: HTMLCanvasElement, isRightClick: boolean = false): void {
     if (!this.isVisible || !this.player) return;
-    
-    const popupX = canvas.width / 2 - 300;
-    const popupY = canvas.height / 2 - 200;
-    const popupWidth = 600;
-    const popupHeight = 400;
-    
-    // Check if close button was clicked
-    if (x >= popupX + popupWidth - 80 && x <= popupX + popupWidth - 20 && 
-        y >= popupY + 10 && y <= popupY + 35) {
-      this.toggle();
-      return;
+
+    // Check for right-click cooldown (prevent accidental double clicks)
+    if (isRightClick) {
+      const now = Date.now();
+      if (now - this.lastRightClickTime < 500) return; // 500ms cooldown
+      this.lastRightClickTime = now;
     }
-    
-    // Check if an inventory item button was clicked
-    const inventory = this.player.getInventory();
-    
-    for (const item of inventory) {
-      const buttonBounds = this.buttonBoundsMap.get(item.id);
-      if (buttonBounds) {
-        if (x >= buttonBounds.x && x <= buttonBounds.x + buttonBounds.width && 
-            y >= buttonBounds.y && y <= buttonBounds.y + buttonBounds.height) {
-          if (item.type === 'potion') {
-            this.player.useItem(item.id);
-          } else if (['weapon', 'armor', 'helmet', 'boots'].includes(item.type)) {
-            this.player.equipItem(item.id);
+
+    // Check inventory grid clicks
+    for (let row = 0; row < this.inventoryGrid.length; row++) {
+      for (let col = 0; col < this.inventoryGrid[row].length; col++) {
+        const cell = this.inventoryGrid[row][col];
+        if (x >= cell.x && x <= cell.x + INVENTORY_GRID.cellSize &&
+            y >= cell.y && y <= cell.y + INVENTORY_GRID.cellSize) {
+          
+          if (cell.item) {
+            const now = Date.now();
+            
+            if (!isRightClick) {
+              // Check for double-click
+              if (this.lastClickedCell && 
+                  this.lastClickedCell.row === row && 
+                  this.lastClickedCell.col === col &&
+                  now - this.lastClickTime < this.doubleClickThreshold) {
+                
+                // Double-click detected
+                if (cell.item.type === 'potion') {
+                  this.player.useItem(cell.item.id);
+                } else if (['weapon', 'armor', 'helmet', 'boots'].includes(cell.item.type)) {
+                  this.player.equipItem(cell.item.id);
+                }
+                this.updateInventoryGrid();
+                
+                // Reset click tracking
+                this.lastClickTime = 0;
+                this.lastClickedCell = null;
+              } else {
+                // First click - just select the item
+                this.lastClickTime = now;
+                this.lastClickedCell = { row, col };
+                this.selectedInventoryItem = cell.item;
+              }
+            } else {
+              // Right click behavior remains the same
+              if (cell.item.type === 'potion') {
+                this.player.useItem(cell.item.id);
+                this.updateInventoryGrid();
+              }
+            }
+          } else {
+            // Clicked empty cell - reset click tracking
+            this.lastClickTime = 0;
+            this.lastClickedCell = null;
           }
           return;
         }
       }
     }
     
-    // Check for inventory item selection
-    const equipmentY = popupY + 60;
-    let inventoryStartY = equipmentY + 25;
-    
-    // Add height for equipment section
-    const equipment = this.player.getEquipment();
-    const slots = [equipment.weapon, equipment.armor, equipment.helmet, equipment.boots];
-    slots.forEach(item => {
-      inventoryStartY += 25;
-      if (item && item.stats) {
-        let statCount = 0;
-        if (item.stats.damage) statCount++;
-        if (item.stats.defense) statCount++;
-        if (item.stats.strengthBonus) statCount++;
-        if (item.stats.dexterityBonus) statCount++;
-        if (item.stats.intelligenceBonus) statCount++;
-        
-        inventoryStartY += statCount * 15 + 5;
-      }
-    });
-    
-    inventoryStartY += 35;
-    
-    // Check if clicking in inventory item area
-    const inventoryX = popupX + popupWidth / 2;
-    const itemHeight = 25;
-    
-    for (let i = 0; i < Math.min(inventory.length, 8); i++) {
-      const itemY = inventoryStartY + i * itemHeight;
-      if (x >= inventoryX && x <= inventoryX + 200 && 
-          y >= itemY - 15 && y <= itemY + 5) {
-        this.selectedInventoryItem = this.selectedInventoryItem === inventory[i] ? null : inventory[i];
-        return;
-      }
-    }
+    // Clicked outside inventory - reset click tracking
+    this.lastClickTime = 0;
+    this.lastClickedCell = null;
   }
 }

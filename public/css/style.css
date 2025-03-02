@@ -24,12 +24,20 @@ body {
 }
 
 #game-messages {
-    height: 10%;
-    padding: 10px;
-    background-color: rgba(0, 0, 0, 0.8);
-    border-top: 1px solid #444;
+    height: auto;
+    max-height: 15%;
+    width: 25%; /* Make it smaller, only taking up 25% of the width */
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.4); /* More transparent background */
+    border-top: 1px solid rgba(68, 68, 68, 0.5); /* More transparent border */
+    border-right: 1px solid rgba(68, 68, 68, 0.5); /* Add right border */
     overflow-y: auto;
-    font-size: 14px;
+    font-size: 12px; /* Smaller text */
+    position: absolute;
+    bottom: 20%;
+    left: 0; /* Align to the left */
+    right: auto; /* Remove right alignment */
+    z-index: 900;
 }
 
 .message {
@@ -57,6 +65,8 @@ body {
     align-items: center;
     gap: 20px;
     justify-content: space-between;
+    position: relative;
+    z-index: 1000; /* Above game messages */
 }
 
 #status-button {
@@ -111,4 +121,33 @@ body {
 
 .exp-bar .stat-bar-fill {
     background-color: #4f4;
+}
+
+.game-message {
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    background-color: rgba(0, 0, 0, 0.7);
+    opacity: 1;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.game-message.info {
+    color: #aaf;
+    border-left: 3px solid #aaf;
+}
+
+.game-message.success {
+    color: #7f7;
+    border-left: 3px solid #7f7;
+}
+
+.game-message.warning {
+    color: #ffa500;
+    border-left: 3px solid #ffa500;
+}
+
+.game-message.danger {
+    color: #f55;
+    border-left: 3px solid #f55;
 }

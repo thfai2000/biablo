@@ -120,17 +120,37 @@ export class Game {
     requestAnimationFrame((time) => this.gameLoop(time));
   }
 
-  handleCanvasClick(event: MouseEvent): void {
+  private handleCanvasClick(event: MouseEvent): void {
+    event.preventDefault();
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-    
+
+    // Pass right-click information to StatsWidget
+    const isRightClick = event.button === 2;
+    if (this.statsWidget.isCurrentlyVisible()) {
+        this.statsWidget.handleCanvasClick(x, y, this.canvas, isRightClick);
+        return;
+    }
+
     if (this.statsWidget.isCurrentlyVisible()) {
       // Let stats widget handle the click if it's visible
       this.statsWidget.handleCanvasClick(x, y, this.canvas);
       this.render(); // Re-render to show any changes
       return;
     }
+  }
+
+  private setupEventListeners(): void {
+    // ...existing event listeners...
+
+    // Prevent context menu on right-click
+    this.canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
+
+    // Add right-click handling
+    this.canvas.addEventListener('mousedown', this.handleCanvasClick.bind(this));
   }
   
   generateFloor(level: number): void {
