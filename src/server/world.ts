@@ -1,12 +1,21 @@
 import { DungeonGenerator, DungeonResult } from './dungeon-generator';
 import { GameConfig } from '../types/game-config';
 
-
-
 export class World {
   private floors: { [key: number]: DungeonResult } = {};
-  private config: GameConfig | null = null;
-    
+  private config: GameConfig;
+
+  constructor(config: GameConfig) {
+    this.config = config; 
+  }
+
+  init(){
+    // generate all floors
+    for (let i = 0; i < this.config.game.totalFloors; i++) {
+      this.generateFloor(i);
+    }
+  }
+  
   generateFloor(level: number): void {
       if (this.floors[level]) {
         return; // Floor already generated

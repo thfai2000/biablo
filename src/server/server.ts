@@ -3,18 +3,23 @@ import http from 'http';
 import path from 'path';
 import fs from 'fs';
 import { GameConfig } from '../types/game-config';
+import { World } from './world';
 
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+const configPath = path.join(__dirname, '../../config', 'game-config.json');
+const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as GameConfig;
+const world = new World(config);
+world.init();
+
 
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, '../../public')));
 
 // Serve the game config
 app.get('/api/config', (req, res) => {
-  const configPath = path.join(__dirname, '../../config', 'game-config.json');
-  const config = JSON.parse(fs.readFileSync(configPath, 'utf8')) as GameConfig;
   res.json(config);
 });
 
