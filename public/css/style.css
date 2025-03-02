@@ -18,7 +18,7 @@ body {
 #game-canvas {
     display: block;
     width: 100%;
-    height: 90%;
+    height: 80%; /* Reduced from 90% to make room for status panel */
     background-color: #111;
     image-rendering: pixelated;
 }
@@ -46,4 +46,56 @@ body {
 
 .message-danger {
     color: #f55;
+}
+
+#status-panel {
+    height: 10%;
+    background-color: rgba(0, 0, 0, 0.9);
+    border-top: 1px solid #444;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.stat-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.stat-bar {
+    width: 150px;
+    height: 20px;
+    background-color: #333;
+    border: 1px solid #555;
+    position: relative;
+    overflow: hidden;
+}
+
+.stat-bar-fill {
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.stat-bar-text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    color: white;
+    font-size: 12px;
+    line-height: 20px;
+    text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+.health-bar .stat-bar-fill {
+    background-color: #f44;
+}
+
+.mana-bar .stat-bar-fill {
+    background-color: #44f;
+}
+
+.exp-bar .stat-bar-fill {
+    background-color: #4f4;
 }

@@ -137,7 +137,7 @@ export class Game {
   
   resizeCanvas(): void {
     this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight * 0.9; // 90% of window height
+    this.canvas.height = window.innerHeight * 0.8; // 80% of window height
   }
   
   updateCamera(): void {

@@ -33,12 +33,30 @@ export class Player {
   private minimapSize: number;
   private minimapScale: number;
 
+  // New stats properties
+  private currentHealth: number;
+  private maxHealth: number;
+  private currentMana: number;
+  private maxMana: number;
+  private experience: number;
+  private level: number;
+  private experienceToNextLevel: number;
+
   constructor(config: GameConfig) {
     this.config = config.player;
     this.x = 0;
     this.y = 0;
     this.currentFloor = 0;
     this.moveSpeed = this.config.initialStats.baseSpeed;
+
+    // Initialize stats
+    this.currentHealth = this.config.initialStats.health;
+    this.maxHealth = this.config.initialStats.health;
+    this.currentMana = this.config.initialStats.mana;
+    this.maxMana = this.config.initialStats.mana;
+    this.experience = 0;
+    this.level = 1;
+    this.experienceToNextLevel = 100; // Base XP needed for level 2
     
     // Set up keyboard controls
     this.keys = {
@@ -60,8 +78,11 @@ export class Player {
     this.minimapScale = 0.2; // Scale factor for the minimap
     
     this._setupInput();
+
+    // Update status bars initially
+    this.updateStatusBars();
   }
-  
+
   private _setupInput(): void {
     document.addEventListener('keydown', (e: KeyboardEvent) => {
       switch(e.key) {
@@ -120,7 +141,87 @@ export class Player {
       }
     });
   }
-  
+
+  private updateStatusBars(): void {
+    // Update health bar
+    const healthBar = document.querySelector('.health-bar .stat-bar-fill') as HTMLElement;
+    const healthText = document.querySelector('.health-bar .stat-bar-text') as HTMLElement;
+    if (healthBar && healthText) {
+      const healthPercent = (this.currentHealth / this.maxHealth) * 100;
+      healthBar.style.width = `${healthPercent}%`;
+      healthText.textContent = `${this.currentHealth}/${this.maxHealth}`;
+    }
+
+    // Update mana bar
+    const manaBar = document.querySelector('.mana-bar .stat-bar-fill') as HTMLElement;
+    const manaText = document.querySelector('.mana-bar .stat-bar-text') as HTMLElement;
+    if (manaBar && manaText) {
+      const manaPercent = (this.currentMana / this.maxMana) * 100;
+      manaBar.style.width = `${manaPercent}%`;
+      manaText.textContent = `${this.currentMana}/${this.maxMana}`;
+    }
+
+    // Update experience bar
+    const expBar = document.querySelector('.exp-bar .stat-bar-fill') as HTMLElement;
+    const expText = document.querySelector('.exp-bar .stat-bar-text') as HTMLElement;
+    if (expBar && expText) {
+      const expPercent = (this.experience / this.experienceToNextLevel) * 100;
+      expBar.style.width = `${expPercent}%`;
+      expText.textContent = `${this.experience}/${this.experienceToNextLevel}`;
+    }
+  }
+
+  public gainExperience(amount: number): void {
+    this.experience += amount;
+    while (this.experience >= this.experienceToNextLevel) {
+      this.levelUp();
+    }
+    this.updateStatusBars();
+  }
+
+  private levelUp(): void {
+    this.level++;
+    this.experience -= this.experienceToNextLevel;
+    // Increase XP needed for next level by 50%
+    this.experienceToNextLevel = Math.floor(this.experienceToNextLevel * 1.5);
+    
+    // Restore HP and MP on level up
+    this.currentHealth = this.maxHealth;
+    this.currentMana = this.maxMana;
+    
+    displayMessage(`Level up! You are now level ${this.level}`, 'info');
+    displayMessage(`You have ${this.config.levelUpPoints} stat points to spend!`, 'info');
+  }
+
+  public takeDamage(amount: number): void {
+    this.currentHealth = Math.max(0, this.currentHealth - amount);
+    this.updateStatusBars();
+    
+    if (this.currentHealth === 0) {
+      displayMessage('You have died!', 'danger');
+      // Handle death later
+    }
+  }
+
+  public useMana(amount: number): boolean {
+    if (this.currentMana >= amount) {
+      this.currentMana -= amount;
+      this.updateStatusBars();
+      return true;
+    }
+    return false;
+  }
+
+  public heal(amount: number): void {
+    this.currentHealth = Math.min(this.maxHealth, this.currentHealth + amount);
+    this.updateStatusBars();
+  }
+
+  public restoreMana(amount: number): void {
+    this.currentMana = Math.min(this.maxMana, this.currentMana + amount);
+    this.updateStatusBars();
+  }
+
   public update(map: number[][], upStairsPos?: Position, downStairsPos?: Position): FloorChangeResult {
     // Store previous position
     const oldX = this.x;
@@ -230,6 +331,9 @@ export class Player {
     } else {
       console.warn('No map data available for minimap rendering');
     }
+
+    // Update status bars each frame
+    this.updateStatusBars();
   }
   
   private drawMinimap(ctx: CanvasRenderingContext2D, map: number[][], upStairsPos?: Position, downStairsPos?: Position): void {

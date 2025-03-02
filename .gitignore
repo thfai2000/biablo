@@ -1,2 +1,5 @@
+public/js/*.js
+public/js/*.css
+public/js/*.js.map
 node_modules
 dist
