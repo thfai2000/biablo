@@ -1,32 +1,7 @@
-import { GameConfig } from '../types/game-config';
 import { Player } from './player';
-import { DungeonGenerator } from './dungeon-generator';
 import { fetchGameConfig, displayMessage } from './utils';
 import { StatsWidget } from './stats-widget'; // Import StatsWidget
-
-interface Position {
-  x: number;
-  y: number;
-}
-
-interface FloorData {
-  map: number[][];
-  upStairsPos: Position | null;
-  downStairsPos: Position | null;
-  enemyLevel?: number;
-  enemyDensity?: number;
-  treasureChestDensity?: number;
-}
-
-interface Assets {
-  tiles: {
-    wall: string;
-    floor: string;
-    upStairs: string;
-    downStairs: string;
-    tree: string; // New tree tile type
-  };
-}
+import { GameConfig, FloorData, Assets, Position } from '../types/game-config';
 
 export class Game {
   public canvas: HTMLCanvasElement;
@@ -72,7 +47,34 @@ export class Game {
     
     this.init();
   }
+
+  async getFloor(level: number): Promise<FloorData> {
+    
+    throw new Error('Not implemented');
+  }
   
+  async getPlayerConfig(): Promise<any> {
+    throw new Error('Not implemented');
+    return {
+      x: 0,
+      y: 0,
+      tileSize: this.tileSize,
+      currentFloor: 0,
+      moveSpeed: 100,
+      stats: {
+        maxHealth: 100,
+        currentHealth: 100,
+        maxMana: 50,
+        currentMana: 50,
+        attack: 10,
+        defense: 5,
+        level: 1,
+        experience: 0,
+        experienceToNextLevel: 100
+      }
+    };
+  }
+
   async init(): Promise<void> {
     // Set canvas size
     this.resizeCanvas();
@@ -93,7 +95,10 @@ export class Game {
     this.statsWidget.setPlayer(this.player);
     
     // Generate the initial floor (village)
-    this.generateFloor(0);
+    // Generate all floors from 0 to 10 (or whatever your max floor number is)
+    for (let floor = 0; floor <= this.config.floors.length; floor++) {
+      this.floors[floor] = await this.getFloor(floor);
+    }
     
     // Start in the village
     this.currentFloor = 0;
@@ -153,33 +158,7 @@ export class Game {
     this.canvas.addEventListener('mousedown', this.handleCanvasClick.bind(this));
   }
   
-  generateFloor(level: number): void {
-    if (this.floors[level]) {
-      return; // Floor already generated
-    }
-    
-    if (!this.config) return;
-    
-    const generator = new DungeonGenerator(this.config, level);
-    
-    if (level === 0) {
-      // Generate village
-      this.floors[level] = generator.generateVillage();
-    } else {
-      // Generate dungeon floor
-      this.floors[level] = generator.generate();
-    }
-    
-    // Add enemy and treasure density to floor data
-    const floorConfig = this.config.floors.find(floor => floor.level === level);
-    if (floorConfig) {
-      this.floors[level].enemyLevel = floorConfig.enemyLevel;
-      this.floors[level].enemyDensity = floorConfig.enemyDensity;
-      this.floors[level].treasureChestDensity = floorConfig.treasureChestDensity;
-    }
-    
-    displayMessage(`Generated floor ${level}`, 'info');
-  }
+  
   
   getStartingPosition(level: number): Position | null {
     const floor = this.floors[level];
@@ -235,9 +214,9 @@ export class Game {
     this.lastTime = currentTime;
     
     // Make sure the current floor is generated
-    if (!this.floors[this.currentFloor]) {
-      this.generateFloor(this.currentFloor);
-    }
+    // if (!this.floors[this.currentFloor]) {
+    //   this.getFloor(this.currentFloor);
+    // }
     
     // Get floor data
     const floorData = this.floors[this.currentFloor];
@@ -256,9 +235,9 @@ export class Game {
       this.currentFloor = this.player.currentFloor;
       
       // Make sure the floor is generated
-      if (!this.floors[this.currentFloor]) {
-        this.generateFloor(this.currentFloor);
-      }
+      // if (!this.floors[this.currentFloor]) {
+      //   this.getFloor(this.currentFloor);
+      // }
       
       const currentFloor = this.floors[this.currentFloor];
       if (currentFloor && result.direction) {

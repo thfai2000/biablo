@@ -4,7 +4,6 @@ module.exports = {
   mode: 'development',
   entry: {
     'utils': './src/client/utils.ts',
-    'dungeon-generator': './src/client/dungeon-generator.ts',
     'player': './src/client/player.ts',
     'game': './src/client/game.ts',
     'stats-widget': './src/client/stats-widget.ts',

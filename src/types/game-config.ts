@@ -46,3 +46,28 @@ export interface FloorConfig {
   treasureChestDensity?: number;
   backgroundMusic: string;
 }
+
+
+export interface Position {
+  x: number;
+  y: number;
+}
+
+export interface FloorData {
+  map: number[][];
+  upStairsPos: Position | null;
+  downStairsPos: Position | null;
+  enemyLevel?: number;
+  enemyDensity?: number;
+  treasureChestDensity?: number;
+}
+
+export interface Assets {
+  tiles: {
+    wall: string;
+    floor: string;
+    upStairs: string;
+    downStairs: string;
+    tree: string; // New tree tile type
+  };
+}

@@ -1,6 +1,6 @@
-import { GameConfig } from '../types/game-config';
+import { GameConfig, Position } from '../types/game-config';
 
-interface Room {
+export interface Room {
   x: number;
   y: number;
   w: number;
@@ -9,12 +9,7 @@ interface Room {
   centerY: number;
 }
 
-interface Position {
-  x: number;
-  y: number;
-}
-
-interface DungeonResult {
+export interface DungeonResult {
   map: number[][];
   upStairsPos: Position | null;
   downStairsPos: Position | null;
