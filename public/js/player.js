@@ -12,12 +12,18 @@ class Player {
             down: false,
             left: false,
             right: false,
-            action: false
+            action: false,
+            toggleMap: false
         };
         
         // Add cooldown for action key
         this.actionCooldown = 1000; // 1 second cooldown
         this.lastActionTime = 0;
+        
+        // Minimap settings
+        this.showMinimap = true; // Default to showing the minimap
+        this.minimapSize = 150;  // Size of the minimap in pixels
+        this.minimapScale = 0.2; // Scale factor for the minimap
         
         this._setupInput();
     }
@@ -45,6 +51,10 @@ class Player {
                 case 'Enter':
                     this.keys.action = true;
                     break;
+                case 'm': // Add key to toggle minimap
+                    this.keys.toggleMap = true;
+                    this.toggleMinimap();
+                    break;
             }
         });
         
@@ -69,6 +79,9 @@ class Player {
                 case ' ':
                 case 'Enter':
                     this.keys.action = false;
+                    break;
+                case 'm':
+                    this.keys.toggleMap = false;
                     break;
             }
         });
@@ -138,7 +151,12 @@ class Player {
         }
     }
     
-    draw(ctx, offsetX, offsetY) {
+    toggleMinimap() {
+        this.showMinimap = !this.showMinimap;
+        displayMessage(`Minimap ${this.showMinimap ? 'enabled' : 'disabled'}`);
+    }
+    
+    draw(ctx, offsetX, offsetY, map, upStairsPos, downStairsPos) {
         // Draw the player
         ctx.fillStyle = '#ff0000';
         ctx.beginPath();
@@ -150,5 +168,120 @@ class Player {
             Math.PI * 2
         );
         ctx.fill();
+        
+        // Try to get map data from game.currentFloor if not provided directly
+        let mapData = map;
+        let upStairsPosition = upStairsPos;
+        let downStairsPosition = downStairsPos;
+        
+        // If map data not provided, try to get it from the game object
+        if (!mapData && game && game.dungeonFloors) {
+            const currentFloorData = game.dungeonFloors[this.currentFloor];
+            if (currentFloorData) {
+                mapData = currentFloorData.map;
+                upStairsPosition = currentFloorData.upStairsPos;
+                downStairsPosition = currentFloorData.downStairsPos;
+            }
+        }
+        
+        // Draw the minimap if map data is available
+        if (mapData) {
+            this.drawMinimap(ctx, mapData, upStairsPosition, downStairsPosition);
+        } else {
+            console.warn('No map data available for minimap rendering');
+        }
+    }
+    
+    drawMinimap(ctx, map, upStairsPos, downStairsPos) {
+        if (!this.showMinimap || !map) return;
+        
+        // Save the current context state
+        ctx.save();
+        
+        const margin = 10;
+        const mapSize = this.minimapSize;
+        const tileSize = Math.max(2, game.tileSize * this.minimapScale); // Ensure tiles are at least 2px
+        
+        // Position the minimap in the top-right corner
+        const minimapX = ctx.canvas.width - mapSize - margin;
+        const minimapY = margin;
+        
+        // Draw minimap background with higher opacity
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(minimapX, minimapY, mapSize, mapSize);
+        
+        // Calculate scaling to fit the map in the minimap area
+        const mapWidth = map[0].length * tileSize;
+        const mapHeight = map.length * tileSize;
+        const scaleX = mapSize / mapWidth;
+        const scaleY = mapSize / mapHeight;
+        const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down if needed
+        
+        // Center the map in the minimap area
+        const scaledWidth = mapWidth * scale;
+        const scaledHeight = mapHeight * scale;
+        const offsetX = minimapX + (mapSize - scaledWidth) / 2;
+        const offsetY = minimapY + (mapSize - scaledHeight) / 2;
+        
+        // Apply scaling
+        ctx.translate(offsetX, offsetY);
+        ctx.scale(scale, scale);
+        
+        // Draw the map tiles
+        for (let y = 0; y < map.length; y++) {
+            for (let x = 0; x < map[y].length; x++) {
+                // Only draw the tile if it's walkable
+                if (map[y][x] === 1) {
+                    ctx.fillStyle = 'rgba(150, 150, 150, 0.8)';
+                    ctx.fillRect(
+                        x * tileSize,
+                        y * tileSize,
+                        tileSize,
+                        tileSize
+                    );
+                }
+            }
+        }
+        
+        // Draw stairs on minimap
+        if (upStairsPos) {
+            ctx.fillStyle = 'rgba(0, 255, 0, 1)';
+            ctx.fillRect(
+                upStairsPos.x * tileSize,
+                upStairsPos.y * tileSize,
+                tileSize,
+                tileSize
+            );
+        }
+        
+        if (downStairsPos) {
+            ctx.fillStyle = 'rgba(255, 165, 0, 1)';
+            ctx.fillRect(
+                downStairsPos.x * tileSize,
+                downStairsPos.y * tileSize,
+                tileSize,
+                tileSize
+            );
+        }
+        
+        // Draw player position on minimap
+        const playerTileX = Math.floor(this.x / game.tileSize);
+        const playerTileY = Math.floor(this.y / game.tileSize);
+        
+        ctx.fillStyle = 'rgba(255, 0, 0, 1)';
+        ctx.fillRect(
+            playerTileX * tileSize,
+            playerTileY * tileSize,
+            tileSize,
+            tileSize
+        );
+        
+        // Restore the context state
+        ctx.restore();
+        
+        // Draw border around minimap (after restore to ensure it's not scaled)
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(minimapX, minimapY, mapSize, mapSize);
     }
 }

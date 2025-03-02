@@ -209,7 +209,7 @@ class Game {
         }
         
         // Draw the player
-        this.player.draw(this.ctx, this.cameraX, this.cameraY);
+        this.player.draw(this.ctx, this.cameraX, this.cameraY, map);
         
         // Draw UI
         this.ctx.fillStyle = '#fff';
