@@ -100,6 +100,14 @@ export class Game {
     // Add click event listener for status button
     this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
     
+    const statusButton = document.getElementById('status-button');
+    if (statusButton) {
+      statusButton.addEventListener('click', () => {
+        this.showStatusPopup = !this.showStatusPopup;
+        this.render();
+      });
+    }
+    
     displayMessage('Welcome to the village! Find the cave to enter the dungeon.', 'info');
     
     // Start game loop
@@ -107,27 +115,21 @@ export class Game {
   }
 
   handleCanvasClick(event: MouseEvent): void {
+    if (!this.showStatusPopup) return;
+    
     const rect = this.canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     
-    // Check if status button was clicked
-    if (x >= this.statusButtonRect.x && 
-        x <= this.statusButtonRect.x + this.statusButtonRect.width &&
-        y >= this.statusButtonRect.y && 
-        y <= this.statusButtonRect.y + this.statusButtonRect.height) {
-      this.showStatusPopup = !this.showStatusPopup;
-    } else if (this.showStatusPopup) {
-      // Close popup if clicking outside of it (we'll check if it's inside the popup area)
-      const popupX = this.canvas.width / 2 - 200;
-      const popupY = this.canvas.height / 2 - 250;
-      const popupWidth = 400;
-      const popupHeight = 500;
-      
-      if (!(x >= popupX && x <= popupX + popupWidth &&
-            y >= popupY && y <= popupY + popupHeight)) {
-        this.showStatusPopup = false;
-      }
+    // Close popup if clicking outside of it
+    const popupX = this.canvas.width / 2 - 200;
+    const popupY = this.canvas.height / 2 - 250;
+    const popupWidth = 400;
+    const popupHeight = 500;
+    
+    if (!(x >= popupX && x <= popupX + popupWidth &&
+          y >= popupY && y <= popupY + popupHeight)) {
+      this.showStatusPopup = false;
     }
   }
   
@@ -392,48 +394,12 @@ export class Game {
     this.ctx.fillText(`HP: ${playerStats.currentHealth}/${playerStats.maxHealth}`, 10, 90);
     this.ctx.fillText(`Mana: ${playerStats.currentMana}/${playerStats.maxMana}`, 10, 110);
     
-    // Draw status button
-    this.drawStatusButton();
-    
     // Draw status popup if open
     if (this.showStatusPopup) {
       this.renderStatusPopup();
     }
   }
-  
-  drawStatusButton(): void {
-    const buttonX = this.canvas.width - 120;
-    const buttonY = 20;
-    const buttonWidth = 100;
-    const buttonHeight = 40;
-    
-    // Store button position and dimensions for click detection
-    this.statusButtonRect = {
-      x: buttonX,
-      y: buttonY,
-      width: buttonWidth,
-      height: buttonHeight
-    };
-    
-    // Button background
-    this.ctx.fillStyle = '#444';
-    this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
-    
-    // Button border
-    this.ctx.strokeStyle = '#aaa';
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
-    
-    // Button text
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '14px Arial';
-    this.ctx.textAlign = 'center';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillText('Status', buttonX + buttonWidth / 2, buttonY + buttonHeight / 2);
-    this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'alphabetic';
-  }
-  
+
   renderStatusPopup(): void {
     if (!this.player) return;
     
