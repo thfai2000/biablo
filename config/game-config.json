@@ -1,0 +1,53 @@
+{
+  "world": {
+    "startingLocation": "village",
+    "totalDungeonFloors": 18
+  },
+  "map": {
+    "tileSize": 32,
+    "viewportWidth": 20,
+    "viewportHeight": 15,
+    "minRoomsPerFloor": 3,
+    "maxRoomsPerFloor": 8,
+    "roomMinSize": 5,
+    "roomMaxSize": 12,
+    "corridorWidth": 2
+  },
+  "player": {
+    "startingStats": {
+      "health": 100,
+      "mana": 50,
+      "strength": 10,
+      "dexterity": 8,
+      "intelligence": 8,
+      "movementSpeed": 3
+    }
+  },
+  "floors": [
+    {
+      "level": 0,
+      "name": "Village",
+      "type": "safe",
+      "hasShop": true,
+      "backgroundMusic": "village_theme.mp3"
+    },
+    {
+      "level": 1,
+      "name": "Dungeon Entrance",
+      "type": "dungeon",
+      "enemyLevel": 1,
+      "enemyDensity": 0.05,
+      "treasureChestDensity": 0.02,
+      "backgroundMusic": "dungeon_theme.mp3"
+    },
+    {
+      "level": 2,
+      "name": "Dark Corridor",
+      "type": "dungeon",
+      "enemyLevel": 2,
+      "enemyDensity": 0.07,
+      "treasureChestDensity": 0.03,
+      "backgroundMusic": "dungeon_theme.mp3"
+    }
+  ]
+}

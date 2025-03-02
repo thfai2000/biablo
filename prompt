@@ -1,12 +1,15 @@
 I would like to create a game (run on html, nodejs server hosting) which is Diablo-like RPG game
 Please try to make most of game settings (e.g. experience value of each levels) configurable and put them into a json file. 
 
+
 The game world is about dungeon. When the game start, the player is in the village.
 There is cave which is the entrance to the dungeon. The player can go down to different levels.
 There are 18 levels(or floors). The maps of each floors are different. 
-The map should have some random walls and rooms. But ensure the rooms are reachable.There some treasure box randomly placed on the map.
-There should be stairs for player to go down and up to reach each floor.
+The map should have some random walls and rooms. But ensure the rooms are reachable. There should be stairs for player to go down and up to reach each floor.
 The screen will update to show next floor when the player use the stairs. 
+
+There some treasure box randomly placed on the map.
+When there is game event, please display these game event in message at the screen bottom.
 
 The enemies are randomly added in each level when the player travel to each floor. The enemy will be respawned only when the player that floor and back to that floor. 
 The player needs to kill some zombies or monster. when some enemies are defeated, they may drop some weapons/equipments or money that the player can take them to use. 
@@ -19,4 +22,4 @@ After level-up, the stats can be upgraded. The player can have 5 points to add i
 
 The player can learn the magics (e.g. shooting fire-ball, ice-lanser) to attach the enemy. But these magics skill have to be learnt through level-up.
 
-When there is game event, please display these game event in message at the screen bottom.
+
