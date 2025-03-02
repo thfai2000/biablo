@@ -15,6 +15,10 @@ class Player {
             action: false
         };
         
+        // Add cooldown for action key
+        this.actionCooldown = 1000; // 1 second cooldown
+        this.lastActionTime = 0;
+        
         this._setupInput();
     }
     
@@ -100,11 +104,13 @@ class Player {
             this.y = oldY;
         }
         
-        // Check for stairs interaction
-        if (this.keys.action) {
+        // Check for stairs interaction with cooldown
+        const currentTime = Date.now();
+        if (this.keys.action && currentTime - this.lastActionTime > this.actionCooldown) {
             // Handle up stairs
             if (upStairsPos && tileX === upStairsPos.x && tileY === upStairsPos.y) {
                 this.currentFloor--;
+                this.lastActionTime = currentTime; // Update last action time
                 displayMessage(`Going up to floor ${this.currentFloor}`);
                 return { floorChange: true, direction: 'up' };
             }
@@ -112,6 +118,7 @@ class Player {
             // Handle down stairs
             if (downStairsPos && tileX === downStairsPos.x && tileY === downStairsPos.y) {
                 this.currentFloor++;
+                this.lastActionTime = currentTime; // Update last action time
                 displayMessage(`Going down to floor ${this.currentFloor}`);
                 return { floorChange: true, direction: 'down' };
             }
