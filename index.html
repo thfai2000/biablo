@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diablo-like RPG</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #222;
+    }
+    canvas {
+      border: 2px solid #444;
+    }
+    #game-container {
+      position: relative;
+    }
+    #ui-overlay {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas" width="1024" height="768"></canvas>
+    <div id="ui-overlay"></div>
+  </div>
+
+  <script src="js/message-log.js"></script>
+  <script src="js/floor.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/input-handler.js"></script>
+  <script>
+    // Initialize game when resources are loaded
+    window.onload = function() {
+      // Load game config
+      fetch('config/game-config.json')
+        .then(response => response.json())
+        .then(config => {
+          const canvas = document.getElementById('game-canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Initialize game
+          const game = new Game(config);
+          const inputHandler = new InputHandler(game, canvas);
+          
+          // Game loop
+          function gameLoop() {
+            // Update game state
+            game.update();
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Render game
+            game.render(ctx);
+            
+            // Continue loop
+            requestAnimationFrame(gameLoop);
+          }
+          
+          // Start game loop
+          gameLoop();
+        })
+        .catch(error => {
+          console.error('Error loading game config:', error);
+        });
+    };
+  </script>
+</body>
+</html>

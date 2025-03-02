@@ -4,7 +4,7 @@ class Player {
         this.x = 0;
         this.y = 0;
         this.currentFloor = 0;
-        this.moveSpeed = this.config.startingStats.movementSpeed;
+        this.moveSpeed = this.config.initialStats.baseSpeed;
         
         // Set up keyboard controls
         this.keys = {

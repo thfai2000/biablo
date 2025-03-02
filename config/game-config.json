@@ -14,14 +14,24 @@
     "corridorWidth": 2
   },
   "player": {
-    "startingStats": {
+    "initialStats": {
       "health": 100,
       "mana": 50,
       "strength": 10,
-      "dexterity": 8,
-      "intelligence": 8,
-      "movementSpeed": 3
-    }
+      "dexterity": 10,
+      "intelligence": 10,
+      "baseSpeed": 3
+    },
+    "levelUpPoints": 5
+  },
+  "game": {
+    "totalFloors": 18,
+    "initialFloor": 0,
+    "villageFloor": 0
+  },
+  "interaction": {
+    "stairsProximity": 50,
+    "clickableHighlightColor": "rgba(255, 255, 0, 0.3)"
   },
   "floors": [
     {
