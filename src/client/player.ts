@@ -320,6 +320,10 @@ export class Player {
     this.updateStatusBars();
   }
 
+  public hasLevelUpPoints(): boolean {
+    return this.stats.level > 1 && this.stats.experience >= this.stats.nextLevelExp;
+  }
+
   public update(map: number[][], upStairsPos?: Position, downStairsPos?: Position): FloorChangeResult {
     // Store previous position
     const oldX = this.x;

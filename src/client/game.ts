@@ -2,6 +2,7 @@ import { GameConfig } from '../types/game-config';
 import { Player } from './player';
 import { DungeonGenerator } from './dungeon-generator';
 import { fetchGameConfig, displayMessage } from './utils';
+import { StatsWidget } from './stats-widget'; // Import StatsWidget
 
 interface Position {
   x: number;
@@ -41,6 +42,7 @@ export class Game {
   private assets: Assets;
   private showStatusPopup: boolean;
   private statusButtonRect: { x: number, y: number, width: number, height: number };
+  private statsWidget: StatsWidget; // Add StatsWidget instance
   
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -55,6 +57,7 @@ export class Game {
     this.lastTime = 0;
     this.showStatusPopup = false;
     this.statusButtonRect = { x: 0, y: 0, width: 0, height: 0 };
+    this.statsWidget = new StatsWidget(); // Initialize StatsWidget
     
     // Assets
     this.assets = {
@@ -103,7 +106,7 @@ export class Game {
     const statusButton = document.getElementById('status-button');
     if (statusButton) {
       statusButton.addEventListener('click', () => {
-        this.showStatusPopup = !this.showStatusPopup;
+        this.statsWidget.toggle(); // Toggle StatsWidget visibility
         this.render();
       });
     }
@@ -395,8 +398,8 @@ export class Game {
     this.ctx.fillText(`Mana: ${playerStats.currentMana}/${playerStats.maxMana}`, 10, 110);
     
     // Draw status popup if open
-    if (this.showStatusPopup) {
-      this.renderStatusPopup();
+    if (this.statsWidget.isCurrentlyVisible()) { // Use StatsWidget's visibility
+      this.statsWidget.render(this.ctx, this.canvas, this.player); // Render StatsWidget
     }
   }
 
