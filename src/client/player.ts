@@ -508,7 +508,7 @@ export class Player {
       Math.abs(currentInputState.position.y - this.previousInputState.position.y) >= 1;
 
       if (positionChanged) {
-        console.log('Position changed', currentInputState.position.x, this.previousInputState.position.x, currentInputState.position.y, this.previousInputState.position.y);
+        // console.log('Position changed', currentInputState.position.x, this.previousInputState.position.x, currentInputState.position.y, this.previousInputState.position.y);
         hasChanged = true;
       }
     }

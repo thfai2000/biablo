@@ -131,7 +131,7 @@ export class Game {
             displayMessage(`Moving ${data.direction} to floor ${data.floorLevel}`, 'info');
           }
         }
-        displayMessage(`Position corrected by server -> (${this.player.x}, ${this.player.y})`, 'warning');
+        //displayMessage(`Position corrected by server -> (${this.player.x}, ${this.player.y})`, 'warning');
       }
     });
     
@@ -480,7 +480,17 @@ export class Game {
     // Update player - convert null to undefined for the stairs positions
     const result = this.player.update(map, upStairsPos || undefined, downStairsPos || undefined);
     
-    
+    // Send player input to server every frame when movement keys are pressed
+    if (this.player) {
+      const inputState = this.player.getInputState();
+      
+      // Always send input state when movement keys are pressed
+      if (inputState.movement.up || inputState.movement.down || 
+          inputState.movement.left || inputState.movement.right ||
+          this.player.hasInputChange(inputState)) {
+        this.socket.emit('playerInput', inputState);
+      }
+    }
     
     // Update camera
     this.updateCamera();
@@ -488,15 +498,6 @@ export class Game {
     // Render the game
     this.render();
     
-    // Get player input and send to server
-    if (this.player) {
-      const inputState = this.player.getInputState();
-      if (this.player.hasInputChange(inputState)) { // Check if input has changed
-
-        this.socket.emit('playerInput', inputState); // Emit only if input has changed
-      }
-    }
-
     // Continue the game loop
     requestAnimationFrame((time) => this.gameLoop(time));
   }
