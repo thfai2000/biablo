@@ -107,7 +107,7 @@ export class Game {
       y: number, 
       timestamp: number, 
       floorLevel: number,
-      direction?: 'up' | 'down'
+      direction: 'up' | 'down'
     }) => {
       if (this.player) {
         this.player.x = data.x;
@@ -117,6 +117,7 @@ export class Game {
         if (data.floorLevel !== this.currentFloor) {
           this.player.handleFloorChange(data.floorLevel);
           this.currentFloor = data.floorLevel;
+          this.handleFloorChange(data);
           
           // Request the new floor data if we don't have it
           if (!this.floors[data.floorLevel]) {
@@ -199,6 +200,50 @@ export class Game {
         });
       }
     });
+  }
+
+
+  // Handle floor changes
+  private handleFloorChange(result: { direction: 'up' | 'down' }): void {
+    if(!this.player) return;
+    this.currentFloor = this.player.currentFloor;
+    
+    // Pre-load the next floor if it's not already loaded
+    if (!this.floors[this.currentFloor]) {
+      this.getFloor(this.currentFloor)
+        .catch(err => {
+          console.error(`Error loading floor ${this.currentFloor}:`, err);
+          displayMessage(`Failed to load floor ${this.currentFloor}. Please try again.`, 'danger');
+        });
+    }
+    
+    // Also pre-load the floor above and below if they exist
+    if (this.currentFloor > 0 && !this.floors[this.currentFloor - 1]) {
+      this.getFloor(this.currentFloor - 1).catch(err => console.warn(`Failed to pre-load floor ${this.currentFloor - 1}:`, err));
+    }
+    if (!this.floors[this.currentFloor + 1]) {
+      this.getFloor(this.currentFloor + 1).catch(err => console.warn(`Failed to pre-load floor ${this.currentFloor + 1}:`, err));
+    }
+    
+    const currentFloor = this.floors[this.currentFloor];
+    if (currentFloor && result.direction) {
+      // Place player at appropriate stairs
+      if (result.direction === 'up') {
+        this.player.placeAtStairs(result.direction, undefined, currentFloor.downStairsPos ? { ...currentFloor.downStairsPos } : undefined);
+        // Immediately center camera on down stairs
+        if (currentFloor.downStairsPos) {
+          this.cameraX = currentFloor.downStairsPos.x * this.tileSize - this.canvas.width / 2;
+          this.cameraY = currentFloor.downStairsPos.y * this.tileSize - this.canvas.height / 2;
+        }
+      } else {
+        this.player.placeAtStairs(result.direction, currentFloor.upStairsPos ? { ...currentFloor.upStairsPos } : undefined, undefined);
+        // Immediately center camera on up stairs
+        if (currentFloor.upStairsPos) {
+          this.cameraX = currentFloor.upStairsPos.x * this.tileSize - this.canvas.width / 2;
+          this.cameraY = currentFloor.upStairsPos.y * this.tileSize - this.canvas.height / 2;
+        }
+      }
+    }
   }
 
   private updateOtherPlayers(players: any[]): void {
@@ -435,47 +480,7 @@ export class Game {
     // Update player - convert null to undefined for the stairs positions
     const result = this.player.update(map, upStairsPos || undefined, downStairsPos || undefined);
     
-    // Handle floor changes
-    if (result && result.floorChange) {
-      this.currentFloor = this.player.currentFloor;
-      
-      // Pre-load the next floor if it's not already loaded
-      if (!this.floors[this.currentFloor]) {
-        this.getFloor(this.currentFloor)
-          .catch(err => {
-            console.error(`Error loading floor ${this.currentFloor}:`, err);
-            displayMessage(`Failed to load floor ${this.currentFloor}. Please try again.`, 'danger');
-          });
-      }
-      
-      // Also pre-load the floor above and below if they exist
-      if (this.currentFloor > 0 && !this.floors[this.currentFloor - 1]) {
-        this.getFloor(this.currentFloor - 1).catch(err => console.warn(`Failed to pre-load floor ${this.currentFloor - 1}:`, err));
-      }
-      if (!this.floors[this.currentFloor + 1]) {
-        this.getFloor(this.currentFloor + 1).catch(err => console.warn(`Failed to pre-load floor ${this.currentFloor + 1}:`, err));
-      }
-      
-      const currentFloor = this.floors[this.currentFloor];
-      if (currentFloor && result.direction) {
-        // Place player at appropriate stairs
-        if (result.direction === 'up') {
-          this.player.placeAtStairs(result.direction, undefined, currentFloor.downStairsPos ? { ...currentFloor.downStairsPos } : undefined);
-          // Immediately center camera on down stairs
-          if (currentFloor.downStairsPos) {
-            this.cameraX = currentFloor.downStairsPos.x * this.tileSize - this.canvas.width / 2;
-            this.cameraY = currentFloor.downStairsPos.y * this.tileSize - this.canvas.height / 2;
-          }
-        } else {
-          this.player.placeAtStairs(result.direction, currentFloor.upStairsPos ? { ...currentFloor.upStairsPos } : undefined, undefined);
-          // Immediately center camera on up stairs
-          if (currentFloor.upStairsPos) {
-            this.cameraX = currentFloor.upStairsPos.x * this.tileSize - this.canvas.width / 2;
-            this.cameraY = currentFloor.upStairsPos.y * this.tileSize - this.canvas.height / 2;
-          }
-        }
-      }
-    }
+    
     
     // Update camera
     this.updateCamera();
