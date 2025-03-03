@@ -104,7 +104,7 @@ export class DungeonGenerator {
     if (this.level > 0) { // No up stairs in village
       this.upStairsPos = {
         x: this.rooms[0].centerX,
-        y: this.rooms[0].centerY
+        y: this.rooms[0].centerY,
       };
       this.map[this.upStairsPos.y][this.upStairsPos.x] = 2; // Up stairs
     }

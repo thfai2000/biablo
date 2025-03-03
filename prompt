@@ -30,3 +30,14 @@ Draw some icon (pixel) to indicate the stats and slots...
 
 Don't fix any codes in the "public/js" folders. They are compiled codes.
 
+
+Please create/refactor into a class Dungeon. A "world" can have a list of floors (type is Dungeon). Each Dungeon actually consists of objects (playerStat and npcStat). It manages the actions/changes of the players and NPC (enemies, zombies...etc). It is a shading approach in open-world game design. The players can move from one Dungeon to another Dungeon by some action/events (such as using the stairs). 
+Also, move the logics of "player.ts" class from "client" folder to "server" folder. Keep the display logics of "player" on client side/folder.
+The client-side should get the playerStat changes from server-side through socket-io.
+
+
+on the client-side, the player can send the actions (move left, right, up, down, attack....etc) to server-side through socket.io (an private channel subject to that player only)
+the server-side will process the playerAction, and reflect the changes on the server player object. 
+
+Once there are changes of serverPlayer or serverNPC, the server will emit/broadcast the changes to all client-sides.
+All client-side will update its players' data and npc data.... 

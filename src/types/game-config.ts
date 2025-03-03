@@ -47,6 +47,11 @@ export interface FloorConfig {
   backgroundMusic: string;
 }
 
+export interface PlayerPostiton {
+  x: number;
+  y: number;
+  timestamp: number; // Add timestamp for movement validation
+}
 
 export interface Position {
   x: number;

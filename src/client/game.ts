@@ -3,6 +3,7 @@ import { fetchGameConfig, displayMessage } from './utils';
 import { StatsWidget } from './stats-widget'; // Import StatsWidget
 import { GameConfig, FloorData, Assets, Position } from '../types/game-config';
 import { io, Socket } from 'socket.io-client';
+import { DrawingHelper } from './DrawingHelper';
 
 // Define interfaces for socket.io message payloads
 interface WorldDataPayload {
@@ -17,6 +18,13 @@ interface WorldErrorPayload {
 interface PlayerRegisteredPayload {
   id: string;
   message: string;
+  playerData: any;
+}
+
+interface GameStateUpdatePayload {
+  floorLevel: number;
+  players: any[];
+  npcs: any[];
 }
 
 export class Game {
@@ -36,7 +44,12 @@ export class Game {
   private statsWidget: StatsWidget; // Add StatsWidget instance
   private socket: Socket; // Socket.IO client
   private playerId: string | null;
-  
+  private otherPlayers: Map<string, any>;
+  private npcs: Map<string, any>;
+  private minimapSize: number;
+  private minimapScale: number;
+
+
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
     this.ctx = this.canvas.getContext('2d')!;
@@ -52,6 +65,11 @@ export class Game {
     this.statusButtonRect = { x: 0, y: 0, width: 0, height: 0 };
     this.statsWidget = new StatsWidget(); // Initialize StatsWidget without player - will be set later
     this.playerId = null;
+    this.otherPlayers = new Map();
+    this.npcs = new Map();
+    
+    this.minimapSize = 150;
+    this.minimapScale = 0.2;
     
     // Initialize Socket.IO connection
     this.socket = io();
@@ -82,13 +100,45 @@ export class Game {
       console.log('Disconnected from server');
       displayMessage('Connection to server lost. Please refresh the page.', 'danger');
     });
+
+    // Handle position corrections from server
+    this.socket.on('positionCorrection', (data: { 
+      x: number, 
+      y: number, 
+      timestamp: number, 
+      floorLevel: number,
+      direction?: 'up' | 'down'
+    }) => {
+      if (this.player) {
+        this.player.x = data.x;
+        this.player.y = data.y;
+
+        // Handle floor change if included
+        if (data.floorLevel !== this.currentFloor) {
+          this.player.handleFloorChange(data.floorLevel);
+          this.currentFloor = data.floorLevel;
+          
+          // Request the new floor data if we don't have it
+          if (!this.floors[data.floorLevel]) {
+            this.getFloor(data.floorLevel).catch(err => {
+              console.error(`Error loading floor ${data.floorLevel}:`, err);
+              displayMessage(`Failed to load floor ${data.floorLevel}. Please try again.`, 'danger');
+            });
+          }
+
+          if (data.direction) {
+            displayMessage(`Moving ${data.direction} to floor ${data.floorLevel}`, 'info');
+          }
+        }
+        displayMessage(`Position corrected by server -> (${this.player.x}, ${this.player.y})`, 'warning');
+      }
+    });
     
     // Handle world data reception
     this.socket.on('worldData', ({ floorLevel, data }: WorldDataPayload) => {
       console.log(`Received data for floor ${floorLevel}`);
       this.floors[floorLevel] = data;
       
-      // If this is the current floor and we're waiting for it, place the player
       if (floorLevel === this.currentFloor && this.player) {
         const startPos = this.getStartingPosition(floorLevel);
         if (startPos) {
@@ -105,10 +155,80 @@ export class Game {
     });
     
     // Handle player registration
-    this.socket.on('playerRegistered', ({ id, message }: PlayerRegisteredPayload) => {
-      console.log(message);
-      this.playerId = id;
+    this.socket.on('playerRegistered', (data: PlayerRegisteredPayload) => {
+      console.log('Player registered:', data.message);
+      this.playerId = data.id;
+      if (this.player) {
+        this.player.handleRegistration(data.id, data.playerData);
+      }
     });
+
+    
+    // Handle game state updates
+    this.socket.on('gameStateUpdate', (data: GameStateUpdatePayload) => {
+      // Only process updates for current floor
+      if (data.floorLevel === this.currentFloor) {
+        // Update main player
+        if (this.player) {
+          const playerData = data.players.find(p => p.id === this.playerId);
+          if (playerData) {
+            this.player.handleGameStateUpdate(playerData);
+          }
+        }
+
+        // Update other players
+        this.updateOtherPlayers(data.players.filter(p => p.id !== this.playerId));
+        
+        // Update NPCs
+        this.updateNPCs(data.npcs);
+      }
+    });
+
+    // Handle inventory updates
+    this.socket.on('inventoryUpdated', (data: { 
+      inventory: any[], 
+      equipment?: any, 
+      stats: any, 
+      success: boolean 
+    }) => {
+      if (data.success && this.player) {
+        this.player.handleInventoryUpdate({
+          inventory: data.inventory,
+          equipment: data.equipment,
+          stats: data.stats
+        });
+      }
+    });
+  }
+
+  private updateOtherPlayers(players: any[]): void {
+    // Clear players not in the update
+    const currentIds = new Set(players.map(p => p.id));
+    for (const [id] of this.otherPlayers) {
+      if (!currentIds.has(id)) {
+        this.otherPlayers.delete(id);
+      }
+    }
+
+    // Update or add players
+    for (const playerData of players) {
+      this.otherPlayers.set(playerData.id, playerData);
+    }
+  }
+
+  private updateNPCs(npcs: any[]): void {
+    // Clear NPCs not in the update
+    const currentIds = new Set(npcs.map(npc => npc.id));
+    for (const [id] of this.npcs) {
+      if (!currentIds.has(id)) {
+        this.npcs.delete(id);
+      }
+    }
+
+    // Update or add NPCs
+    for (const npcData of npcs) {
+      this.npcs.set(npcData.id, npcData);
+    }
   }
 
   async getFloor(level: number): Promise<FloorData> {
@@ -149,32 +269,6 @@ export class Game {
     });
   }
   
-  async getPlayerConfig(): Promise<any> {
-    // Register player with the server
-    const playerConfig = {
-      x: 0,
-      y: 0,
-      tileSize: this.tileSize,
-      currentFloor: 0,
-      moveSpeed: 100,
-      stats: {
-        maxHealth: 100,
-        currentHealth: 100,
-        maxMana: 50,
-        currentMana: 50,
-        attack: 10,
-        defense: 5,
-        level: 1,
-        experience: 0,
-        experienceToNextLevel: 100
-      }
-    };
-    
-    // Register player with the server
-    this.socket.emit('registerPlayer', playerConfig);
-    
-    return playerConfig;
-  }
 
   async init(): Promise<void> {
     // Set canvas size
@@ -233,6 +327,9 @@ export class Game {
     // Set up additional event listeners
     this.setupEventListeners();
     
+    // Register player with the server
+    this.socket.emit('registerPlayer', {username: 'Player 1'});
+
     displayMessage('Welcome to the village! Find the cave to enter the dungeon.', 'info');
     
     // Start game loop
@@ -271,7 +368,6 @@ export class Game {
     // Add right-click handling
     this.canvas.addEventListener('mousedown', this.handleCanvasClick.bind(this));
   }
-  
   
   
   getStartingPosition(level: number): Position | null {
@@ -340,7 +436,7 @@ export class Game {
     const result = this.player.update(map, upStairsPos || undefined, downStairsPos || undefined);
     
     // Handle floor changes
-    if (result.floorChange) {
+    if (result && result.floorChange) {
       this.currentFloor = this.player.currentFloor;
       
       // Pre-load the next floor if it's not already loaded
@@ -364,14 +460,14 @@ export class Game {
       if (currentFloor && result.direction) {
         // Place player at appropriate stairs
         if (result.direction === 'up') {
-          this.player.placeAtStairs(result.direction, undefined, currentFloor.downStairsPos || undefined);
+          this.player.placeAtStairs(result.direction, undefined, currentFloor.downStairsPos ? { ...currentFloor.downStairsPos } : undefined);
           // Immediately center camera on down stairs
           if (currentFloor.downStairsPos) {
             this.cameraX = currentFloor.downStairsPos.x * this.tileSize - this.canvas.width / 2;
             this.cameraY = currentFloor.downStairsPos.y * this.tileSize - this.canvas.height / 2;
           }
         } else {
-          this.player.placeAtStairs(result.direction, currentFloor.upStairsPos || undefined, undefined);
+          this.player.placeAtStairs(result.direction, currentFloor.upStairsPos ? { ...currentFloor.upStairsPos } : undefined, undefined);
           // Immediately center camera on up stairs
           if (currentFloor.upStairsPos) {
             this.cameraX = currentFloor.upStairsPos.x * this.tileSize - this.canvas.width / 2;
@@ -387,6 +483,15 @@ export class Game {
     // Render the game
     this.render();
     
+    // Get player input and send to server
+    if (this.player) {
+      const inputState = this.player.getInputState();
+      if (this.player.hasInputChange(inputState)) { // Check if input has changed
+
+        this.socket.emit('playerInput', inputState); // Emit only if input has changed
+      }
+    }
+
     // Continue the game loop
     requestAnimationFrame((time) => this.gameLoop(time));
   }
@@ -402,113 +507,44 @@ export class Game {
     
     const { map, upStairsPos, downStairsPos, enemyLevel, enemyDensity, treasureChestDensity } = floorData;
     
-    // Calculate visible tile range based on camera position
-    const startCol = Math.floor(this.cameraX / this.tileSize);
-    const endCol = Math.min(
-      map[0].length, 
-      startCol + Math.ceil(this.canvas.width / this.tileSize) + 1
-    );
-    
-    const startRow = Math.floor(this.cameraY / this.tileSize);
-    const endRow = Math.min(
-      map.length, 
-      startRow + Math.ceil(this.canvas.height / this.tileSize) + 1
-    );
-    
     // Draw the map
-    for (let y = startRow; y < endRow; y++) {
-      for (let x = startCol; x < endCol; x++) {
-        const tileType = map[y][x];
-        
-        switch (tileType) {
-          case 0: // Wall
-            this.ctx.fillStyle = this.assets.tiles.wall;
-            this.ctx.fillRect(
-              x * this.tileSize - this.cameraX,
-              y * this.tileSize - this.cameraY,
-              this.tileSize,
-              this.tileSize
-            );
-            break;
-          case 1: // Floor
-            this.ctx.fillStyle = this.assets.tiles.floor;
-            this.ctx.fillRect(
-              x * this.tileSize - this.cameraX,
-              y * this.tileSize - this.cameraY,
-              this.tileSize,
-              this.tileSize
-            );
-            break;
-          case 2: // Up stairs
-            this.ctx.fillStyle = this.assets.tiles.upStairs;
-            this.ctx.fillRect(
-              x * this.tileSize - this.cameraX,
-              y * this.tileSize - this.cameraY,
-              this.tileSize,
-              this.tileSize
-            );
-            break;
-          case 3: // Down stairs
-            this.ctx.fillStyle = this.assets.tiles.downStairs;
-            this.ctx.fillRect(
-              x * this.tileSize - this.cameraX,
-              y * this.tileSize - this.cameraY,
-              this.tileSize,
-              this.tileSize
-            );
-            break;
-          case 4: // Tree
-            // First draw the ground under the tree
-            this.ctx.fillStyle = this.assets.tiles.floor;
-            this.ctx.fillRect(
-              x * this.tileSize - this.cameraX,
-              y * this.tileSize - this.cameraY,
-              this.tileSize,
-              this.tileSize
-            );
-            
-            // Draw tree trunk (brown stem)
-            this.ctx.fillStyle = '#8B4513'; // Saddle brown for trunk
-            this.ctx.fillRect(
-              x * this.tileSize + this.tileSize * 0.45 - this.cameraX,
-              y * this.tileSize + this.tileSize * 0.5 - this.cameraY,
-              this.tileSize * 0.1,
-              this.tileSize * 0.5
-            );
-            
-            // Draw first layer of leaves (bottom, wider triangle)
-            this.ctx.fillStyle = '#228B22'; // Forest green
-            this.ctx.beginPath();
-            this.ctx.moveTo(x * this.tileSize + this.tileSize * 0.2 - this.cameraX, y * this.tileSize + this.tileSize * 0.6 - this.cameraY);
-            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.8 - this.cameraX, y * this.tileSize + this.tileSize * 0.6 - this.cameraY);
-            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.5 - this.cameraX, y * this.tileSize + this.tileSize * 0.25 - this.cameraY);
-            this.ctx.closePath();
-            this.ctx.fill();
-            
-            // Draw second layer of leaves (middle triangle)
-            this.ctx.fillStyle = '#32CD32'; // Lime green
-            this.ctx.beginPath();
-            this.ctx.moveTo(x * this.tileSize + this.tileSize * 0.25 - this.cameraX, y * this.tileSize + this.tileSize * 0.45 - this.cameraY);
-            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.75 - this.cameraX, y * this.tileSize + this.tileSize * 0.45 - this.cameraY);
-            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.5 - this.cameraX, y * this.tileSize + this.tileSize * 0.1 - this.cameraY);
-            this.ctx.closePath();
-            this.ctx.fill();
-            
-            // Draw top layer of leaves (smaller triangle)
-            this.ctx.fillStyle = '#90EE90'; // Light green
-            this.ctx.beginPath();
-            this.ctx.moveTo(x * this.tileSize + this.tileSize * 0.3 - this.cameraX, y * this.tileSize + this.tileSize * 0.3 - this.cameraY);
-            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.7 - this.cameraX, y * this.tileSize + this.tileSize * 0.3 - this.cameraY);
-            this.ctx.lineTo(x * this.tileSize + this.tileSize * 0.5 - this.cameraX, y * this.tileSize - this.cameraY);
-            this.ctx.closePath();
-            this.ctx.fill();
-            break;
-        }
-      }
-    }
+    DrawingHelper.drawMap(this.ctx, map, this.assets, this.tileSize, this.cameraX, this.cameraY);
     
     // Draw the player
-    this.player.draw(this.ctx, this.cameraX, this.cameraY, map, upStairsPos || undefined, downStairsPos || undefined);
+    DrawingHelper.drawPlayer(this.ctx, this.player, this.cameraX, this.cameraY);
+
+    // Draw the minimap if enabled
+    if (this.player.showMinimap && map) {
+      DrawingHelper.drawMinimap(this.ctx, map, this.player, this.player.size, this.minimapSize, this.minimapScale, upStairsPos, downStairsPos);
+    }
+    
+    // Draw other players
+    for (const [_, playerData] of this.otherPlayers) {
+      this.ctx.fillStyle = '#0000ff'; // Blue for other players
+      this.ctx.beginPath();
+      this.ctx.arc(
+        playerData.x - this.cameraX,
+        playerData.y - this.cameraY,
+        this.tileSize / 2,
+        0,
+        Math.PI * 2
+      );
+      this.ctx.fill();
+    }
+    
+    // Draw NPCs
+    for (const [_, npcData] of this.npcs) {
+      this.ctx.fillStyle = '#00ff00'; // Green for NPCs
+      this.ctx.beginPath();
+      this.ctx.arc(
+        npcData.x - this.cameraX,
+        npcData.y - this.cameraY,
+        this.tileSize / 2,
+        0,
+        Math.PI * 2
+      );
+      this.ctx.fill();
+    }
     
     // Draw UI
     this.ctx.fillStyle = '#fff';
@@ -533,6 +569,19 @@ export class Game {
     if (this.statsWidget.isCurrentlyVisible()) {
         this.statsWidget.renderCanvas(this.ctx, this.canvas);
     }
+  }
+
+  // Add methods to handle player actions
+  public useItem(itemId: string): void {
+    this.socket.emit('useItem', itemId);
+  }
+
+  public equipItem(itemId: string): void {
+    this.socket.emit('equipItem', itemId);
+  }
+
+  public unequipItem(slot: string): void {
+    this.socket.emit('unequipItem', slot);
   }
 }
 
