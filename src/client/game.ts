@@ -2,6 +2,22 @@ import { Player } from './player';
 import { fetchGameConfig, displayMessage } from './utils';
 import { StatsWidget } from './stats-widget'; // Import StatsWidget
 import { GameConfig, FloorData, Assets, Position } from '../types/game-config';
+import { io, Socket } from 'socket.io-client';
+
+// Define interfaces for socket.io message payloads
+interface WorldDataPayload {
+  floorLevel: number;
+  data: FloorData;
+}
+
+interface WorldErrorPayload {
+  message: string;
+}
+
+interface PlayerRegisteredPayload {
+  id: string;
+  message: string;
+}
 
 export class Game {
   public canvas: HTMLCanvasElement;
@@ -18,6 +34,8 @@ export class Game {
   private showStatusPopup: boolean;
   private statusButtonRect: { x: number, y: number, width: number, height: number };
   private statsWidget: StatsWidget; // Add StatsWidget instance
+  private socket: Socket; // Socket.IO client
+  private playerId: string | null;
   
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -33,6 +51,11 @@ export class Game {
     this.showStatusPopup = false;
     this.statusButtonRect = { x: 0, y: 0, width: 0, height: 0 };
     this.statsWidget = new StatsWidget(); // Initialize StatsWidget without player - will be set later
+    this.playerId = null;
+    
+    // Initialize Socket.IO connection
+    this.socket = io();
+    this.setupSocketListeners();
     
     // Assets
     this.assets = {
@@ -48,14 +71,87 @@ export class Game {
     this.init();
   }
 
-  async getFloor(level: number): Promise<FloorData> {
+  private setupSocketListeners(): void {
+    // Handle socket connection
+    this.socket.on('connect', () => {
+      console.log('Connected to server with id:', this.socket.id);
+    });
     
-    throw new Error('Not implemented');
+    // Handle socket disconnection
+    this.socket.on('disconnect', () => {
+      console.log('Disconnected from server');
+      displayMessage('Connection to server lost. Please refresh the page.', 'danger');
+    });
+    
+    // Handle world data reception
+    this.socket.on('worldData', ({ floorLevel, data }: WorldDataPayload) => {
+      console.log(`Received data for floor ${floorLevel}`);
+      this.floors[floorLevel] = data;
+      
+      // If this is the current floor and we're waiting for it, place the player
+      if (floorLevel === this.currentFloor && this.player) {
+        const startPos = this.getStartingPosition(floorLevel);
+        if (startPos) {
+          this.player.x = startPos.x * this.tileSize;
+          this.player.y = startPos.y * this.tileSize;
+        }
+      }
+    });
+    
+    // Handle world data errors
+    this.socket.on('worldError', ({ message }: WorldErrorPayload) => {
+      console.error('World data error:', message);
+      displayMessage(`Error: ${message}`, 'danger');
+    });
+    
+    // Handle player registration
+    this.socket.on('playerRegistered', ({ id, message }: PlayerRegisteredPayload) => {
+      console.log(message);
+      this.playerId = id;
+    });
+  }
+
+  async getFloor(level: number): Promise<FloorData> {
+    return new Promise((resolve, reject) => {
+      // If we already have this floor cached, return it
+      if (this.floors[level]) {
+        resolve(this.floors[level]);
+        return;
+      }
+      
+      // Request floor data from server
+      this.socket.emit('getWorldData', level);
+      
+      // Set up a one-time listener for the response
+      const worldDataListener = ({ floorLevel, data }: WorldDataPayload) => {
+        if (floorLevel === level) {
+          this.socket.off('worldData', worldDataListener);
+          this.floors[level] = data;
+          resolve(data);
+        }
+      };
+      
+      // Set up error listener
+      const errorListener = ({ message }: WorldErrorPayload) => {
+        this.socket.off('worldError', errorListener);
+        reject(new Error(message));
+      };
+      
+      this.socket.on('worldData', worldDataListener);
+      this.socket.on('worldError', errorListener);
+      
+      // Set a timeout in case the server doesn't respond
+      setTimeout(() => {
+        this.socket.off('worldData', worldDataListener);
+        this.socket.off('worldError', errorListener);
+        reject(new Error(`Timeout getting floor ${level} data`));
+      }, 5000); // 5 second timeout
+    });
   }
   
   async getPlayerConfig(): Promise<any> {
-    throw new Error('Not implemented');
-    return {
+    // Register player with the server
+    const playerConfig = {
       x: 0,
       y: 0,
       tileSize: this.tileSize,
@@ -73,6 +169,11 @@ export class Game {
         experienceToNextLevel: 100
       }
     };
+    
+    // Register player with the server
+    this.socket.emit('registerPlayer', playerConfig);
+    
+    return playerConfig;
   }
 
   async init(): Promise<void> {
@@ -95,17 +196,27 @@ export class Game {
     this.statsWidget.setPlayer(this.player);
     
     // Generate the initial floor (village)
-    // Generate all floors from 0 to 10 (or whatever your max floor number is)
-    for (let floor = 0; floor <= this.config.floors.length; floor++) {
-      this.floors[floor] = await this.getFloor(floor);
-    }
-    
-    // Start in the village
-    this.currentFloor = 0;
-    const startPos = this.getStartingPosition(0);
-    if (this.player && startPos) {
-      this.player.x = startPos.x * this.tileSize;
-      this.player.y = startPos.y * this.tileSize;
+    try {
+      // Get the initial floor (village) from the server
+      this.floors[0] = await this.getFloor(0);
+      
+      // Pre-load the next floor
+      if (this.config.floors.length > 1) {
+        this.getFloor(1).catch(err => console.warn('Failed to pre-load floor 1:', err));
+      }
+      
+      // Start in the village
+      this.currentFloor = 0;
+      const startPos = this.getStartingPosition(0);
+      if (this.player && startPos) {
+        this.player.x = startPos.x * this.tileSize;
+        this.player.y = startPos.y * this.tileSize;
+      }
+      
+    } catch (error) {
+      console.error('Failed to initialize floor data:', error);
+      displayMessage('Failed to load world data. Please refresh the page.', 'danger');
+      return;
     }
     
     // Add click event listener for status button
@@ -118,6 +229,9 @@ export class Game {
         this.render();
       });
     }
+    
+    // Set up additional event listeners
+    this.setupEventListeners();
     
     displayMessage('Welcome to the village! Find the cave to enter the dungeon.', 'info');
     
@@ -213,11 +327,6 @@ export class Game {
     const deltaTime = (currentTime - this.lastTime) / 1000; // in seconds
     this.lastTime = currentTime;
     
-    // Make sure the current floor is generated
-    // if (!this.floors[this.currentFloor]) {
-    //   this.getFloor(this.currentFloor);
-    // }
-    
     // Get floor data
     const floorData = this.floors[this.currentFloor];
     if (!floorData || !this.player) {
@@ -234,10 +343,22 @@ export class Game {
     if (result.floorChange) {
       this.currentFloor = this.player.currentFloor;
       
-      // Make sure the floor is generated
-      // if (!this.floors[this.currentFloor]) {
-      //   this.getFloor(this.currentFloor);
-      // }
+      // Pre-load the next floor if it's not already loaded
+      if (!this.floors[this.currentFloor]) {
+        this.getFloor(this.currentFloor)
+          .catch(err => {
+            console.error(`Error loading floor ${this.currentFloor}:`, err);
+            displayMessage(`Failed to load floor ${this.currentFloor}. Please try again.`, 'danger');
+          });
+      }
+      
+      // Also pre-load the floor above and below if they exist
+      if (this.currentFloor > 0 && !this.floors[this.currentFloor - 1]) {
+        this.getFloor(this.currentFloor - 1).catch(err => console.warn(`Failed to pre-load floor ${this.currentFloor - 1}:`, err));
+      }
+      if (!this.floors[this.currentFloor + 1]) {
+        this.getFloor(this.currentFloor + 1).catch(err => console.warn(`Failed to pre-load floor ${this.currentFloor + 1}:`, err));
+      }
       
       const currentFloor = this.floors[this.currentFloor];
       if (currentFloor && result.direction) {
@@ -402,6 +523,11 @@ export class Game {
     const playerStats = this.player.getStats();
     this.ctx.fillText(`HP: ${playerStats.currentHealth}/${playerStats.maxHealth}`, 10, 90);
     this.ctx.fillText(`Mana: ${playerStats.currentMana}/${playerStats.maxMana}`, 10, 110);
+    
+    // Draw connection status
+    const connectionStatus = this.socket.connected ? 'Connected' : 'Disconnected';
+    this.ctx.fillStyle = this.socket.connected ? '#0f0' : '#f00'; // Green if connected, red if disconnected
+    this.ctx.fillText(`Server: ${connectionStatus}`, 10, 130);
     
     // Draw status popup if open
     if (this.statsWidget.isCurrentlyVisible()) {

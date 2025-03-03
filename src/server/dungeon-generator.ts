@@ -9,7 +9,7 @@ export interface Room {
   centerY: number;
 }
 
-export interface DungeonResult {
+export interface Dungeon {
   map: number[][];
   upStairsPos: Position | null;
   downStairsPos: Position | null;
@@ -49,7 +49,7 @@ export class DungeonGenerator {
     this.downStairsPos = null;
   }
   
-  generate(): DungeonResult {
+  generate(): Dungeon {
     // Reset the map
     this.map = Array(this.height).fill(0).map(() => Array(this.width).fill(0));
     this.rooms = [];
@@ -119,7 +119,7 @@ export class DungeonGenerator {
     
     // Add enemy and treasure density to dungeon result
     const floorConfig = this.config.floors.find(floor => floor.level === this.level);
-    const result: DungeonResult = {
+    const result: Dungeon = {
       map: this.map,
       upStairsPos: this.upStairsPos,
       downStairsPos: this.downStairsPos
@@ -192,7 +192,7 @@ export class DungeonGenerator {
   }
   
   // Special generator for the village (level 0)
-  generateVillage(): DungeonResult {
+  generateVillage(): Dungeon {
     // Create a more open space for the village
     for (let y = 5; y < this.height - 5; y++) {
       for (let x = 5; x < this.width - 5; x++) {
