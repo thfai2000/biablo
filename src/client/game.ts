@@ -4,6 +4,7 @@ import { StatsWidget } from './stats-widget'; // Import StatsWidget
 import { GameConfig, FloorData, Assets, Position } from '../types/game-config';
 import { io, Socket } from 'socket.io-client';
 import { DrawingHelper } from './DrawingHelper';
+import { GameRenderer3D } from './3DRenderer';
 
 // Define interfaces for socket.io message payloads
 interface WorldDataPayload {
@@ -48,6 +49,8 @@ export class Game {
   private npcs: Map<string, any>;
   private minimapSize: number;
   private minimapScale: number;
+  private renderer3D: GameRenderer3D | null;
+  private is3DMode: boolean;
 
 
   constructor() {
@@ -70,6 +73,9 @@ export class Game {
     
     this.minimapSize = 150;
     this.minimapScale = 0.2;
+    
+    this.renderer3D = null;
+    this.is3DMode = true; // Set to true to enable 3D mode by default
     
     // Initialize Socket.IO connection
     this.socket = io();
@@ -215,6 +221,9 @@ export class Game {
           console.error(`Error loading floor ${this.currentFloor}:`, err);
           displayMessage(`Failed to load floor ${this.currentFloor}. Please try again.`, 'danger');
         });
+    } else if (this.is3DMode && this.renderer3D) {
+      // We already have this floor data, ensure it's loaded in the 3D renderer
+      this.renderer3D.loadFloor(this.currentFloor, this.floors[this.currentFloor]);
     }
     
     // Also pre-load the floor above and below if they exist
@@ -292,6 +301,12 @@ export class Game {
         if (floorLevel === level) {
           this.socket.off('worldData', worldDataListener);
           this.floors[level] = data;
+          
+          // Load the floor data into the 3D renderer if in 3D mode
+          if (this.is3DMode && this.renderer3D) {
+            this.renderer3D.loadFloor(level, data);
+          }
+          
           resolve(data);
         }
       };
@@ -328,6 +343,11 @@ export class Game {
       return;
     }
     
+    // Initialize 3D renderer if 3D mode is enabled
+    if (this.is3DMode && !this.renderer3D) {
+      this.renderer3D = new GameRenderer3D(this.canvas, this.config);
+    }
+    
     // Initialize player
     this.player = new Player(this.config);
     
@@ -350,6 +370,11 @@ export class Game {
       if (this.player && startPos) {
         this.player.x = startPos.x * this.tileSize;
         this.player.y = startPos.y * this.tileSize;
+      }
+      
+      // Load the current floor data into the 3D renderer
+      if (this.is3DMode && this.renderer3D && this.floors[0]) {
+        this.renderer3D.loadFloor(0, this.floors[0]);
       }
       
     } catch (error) {
@@ -496,7 +521,41 @@ export class Game {
     this.updateCamera();
     
     // Render the game
-    this.render();
+    if (this.is3DMode && this.renderer3D) {
+      // 3D rendering
+      
+      // Update player position in 3D space
+      if (this.player) {
+        this.renderer3D.updatePlayer('self', this.player.x, this.player.y, this.player.z || 0);
+      }
+      
+      // Update other players
+      this.otherPlayers.forEach((playerData, id) => {
+        this.renderer3D!.updatePlayer(
+          id,
+          playerData.x,
+          playerData.y,
+          playerData.z || 0
+        );
+      });
+      
+      // Update NPCs
+      this.npcs.forEach((npcData, id) => {
+        this.renderer3D!.updateNPC(
+          id,
+          npcData.type,
+          npcData.x,
+          npcData.y,
+          npcData.z || 0
+        );
+      });
+      
+      // Render 3D scene
+      this.renderer3D.render();
+    } else {
+      // 2D rendering (existing code)
+      this.render();
+    }
     
     // Continue the game loop
     requestAnimationFrame((time) => this.gameLoop(time));
@@ -588,6 +647,24 @@ export class Game {
 
   public unequipItem(slot: string): void {
     this.socket.emit('unequipItem', slot);
+  }
+
+  // Toggle between 2D and 3D rendering
+  public toggle3DMode(): void {
+    this.is3DMode = !this.is3DMode;
+    
+    if (this.is3DMode && !this.renderer3D) {
+      // Initialize 3D renderer if switching to 3D mode
+      this.renderer3D = new GameRenderer3D(this.canvas, this.config!);
+      
+      // Load current floor data
+      const floorData = this.floors[this.currentFloor];
+      if (floorData) {
+        this.renderer3D.loadFloor(this.currentFloor, floorData);
+      }
+    }
+    
+    displayMessage(`Switched to ${this.is3DMode ? '3D' : '2D'} mode`, 'info');
   }
 }
 

@@ -34,6 +34,7 @@ export interface GameConfig {
     clickableHighlightColor: string;
   };
   floors: FloorConfig[];
+  render3D: RenderConfig;
 }
 
 export interface FloorConfig {
@@ -56,10 +57,11 @@ export interface PlayerPostiton {
 export interface Position {
   x: number;
   y: number;
+  z: number; // Added z-coordinate for 3D
 }
 
 export interface FloorData {
-  map: number[][];
+  map: number[][][]; // Changed to 3D array for voxel-based map
   upStairsPos: Position | null;
   downStairsPos: Position | null;
   enemyLevel?: number;
@@ -75,4 +77,11 @@ export interface Assets {
     downStairs: string;
     tree: string; // New tree tile type
   };
+}
+
+export interface RenderConfig {
+  viewDistance: number;
+  fogDensity: number;
+  lightIntensity: number;
+  shadowQuality: 'low' | 'medium' | 'high';
 }

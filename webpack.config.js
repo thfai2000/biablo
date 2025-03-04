@@ -7,6 +7,7 @@ module.exports = {
     'player': './src/client/player.ts',
     'game': './src/client/game.ts',
     'stats-widget': './src/client/stats-widget.ts',
+    '3d-renderer': './src/client/3DRenderer.ts'
   },
   devtool: 'source-map',
   module: {
