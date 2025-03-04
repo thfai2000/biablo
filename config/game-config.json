@@ -20,7 +20,7 @@
       "strength": 10,
       "dexterity": 10,
       "intelligence": 10,
-      "baseSpeed": 3
+      "baseSpeed": 200
     },
     "levelUpPoints": 5
   },

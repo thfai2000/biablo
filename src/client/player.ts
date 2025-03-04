@@ -118,15 +118,26 @@ export class Player {
   private inventory: Item[];
   private equipment: Equipment;
   
+  // Physics properties
+  private gravity: number = 9.8;
+  private jumpForce: number = 5;
+  private isGrounded: boolean = true;
+  private localCollisionMap: number[][][] | null = null; 
+  
   constructor(config: GameConfig) {
     // Initialize basic properties
     this.id = '';
     this.username = 'Player';
-    this.x = 0;
-    this.y = 0;
+    this.size = 24; // Default size for collision detection - Move this up before position calculation
+    
+    // Set initial position in the center of first floor
+    const mapWidth = config.map.viewportWidth;
+    const mapHeight = config.map.viewportHeight;
+    this.x = (mapWidth * this.size) / 2;
+    this.y = (mapHeight * this.size) / 2;
     this.z = config.map.tileSize; // Initialize z position above ground level
+    
     this.currentFloor = config.game.initialFloor;
-    this.size = 24; // Default size for collision detection
     this.moveSpeed = config.player.initialStats.baseSpeed;
     this.lastUpdateTime = Date.now();
     this.verticalVelocity = 0;
@@ -200,6 +211,7 @@ export class Player {
         case 'ArrowUp':
         case 'w':
           this.keys.up = true;
+          console.log('up');
           break;
         case 'ArrowDown':
         case 's':
@@ -464,6 +476,9 @@ export class Player {
     const deltaTime = (currentTime - this.lastUpdateTime) / 1000; // Convert to seconds
     this.lastUpdateTime = currentTime;
     
+    // Process local movement for immediate feedback
+    this.processLocalMovement(deltaTime, map);
+    
     // Check for floor change using action key and position
     if (this.keys.action) {
       // In 3D space, we need to check if player is near stairs (not just exact position)
@@ -487,6 +502,158 @@ export class Player {
     }
     
     return { floorChange: false };
+  }
+
+  /**
+   * Process local movement before server confirmation for better responsiveness
+   */
+  private processLocalMovement(deltaTime: number, map: number[][]): void {
+    if (!map) return;
+    
+    // Convert 2D map to a simple 3D representation if needed
+    if (!this.localCollisionMap) {
+      // Create a simple 3D map from the 2D map with 3 layers: below, at, and above player height
+      this.localCollisionMap = [
+        map, // Ground level
+        map.map(row => row.map(cell => cell === 0 ? 0 : 1)), // Player height level - walls only
+        map.map(row => row.map(cell => cell === 0 ? 0 : 1))  // Above player - walls only
+      ];
+    }
+    
+    // Adjust speed based on delta time
+    const adjustedSpeed = this.moveSpeed * deltaTime;
+    
+    // Calculate movement vectors based on input and camera direction
+    let moveX = 0;
+    let moveY = 0;
+    
+    // Handle WASD/Arrow movement relative to camera direction
+    if (this.keys.up) moveY -= 1;
+    if (this.keys.down) moveY += 1;
+    if (this.keys.left) moveX -= 1;
+    if (this.keys.right) moveX += 1;
+    
+    // Normalize diagonal movement
+    if (moveX !== 0 && moveY !== 0) {
+      const length = Math.sqrt(moveX * moveX + moveY * moveY);
+      moveX /= length;
+      moveY /= length;
+    }
+    
+    // Convert to camera-relative movement
+    const forward = {
+      x: Math.sin(this.cameraAngleX) * Math.cos(this.cameraAngleY),
+      z: Math.cos(this.cameraAngleX) * Math.cos(this.cameraAngleY)
+    };
+    
+    // Calculate right vector (perpendicular to forward)
+    const right = {
+      x: forward.z,
+      z: -forward.x
+    };
+    
+    // Calculate final movement vector
+    const finalMoveX = (moveY * forward.x + moveX * right.x) * adjustedSpeed;
+    const finalMoveZ = (moveY * forward.z + moveX * right.z) * adjustedSpeed;
+    
+    // Store position before movement for collision detection
+    const oldX = this.x;
+    const oldY = this.y;
+    const oldZ = this.z;
+    
+    // Apply horizontal movement with collision detection
+    const newX = this.x + finalMoveX;
+    const newY = this.y + finalMoveZ;
+    
+    // Check X-axis collision
+    if (!this.checkCollision(newX, this.y, this.z)) {
+      this.x = newX;
+    }
+    
+    // Check Z-axis collision
+    if (!this.checkCollision(this.x, newY, this.z)) {
+      this.y = newY;
+    }
+    
+    // Apply gravity
+    this.verticalVelocity -= this.gravity * deltaTime;
+    
+    // Apply jump if on ground and jump key pressed
+    if (this.keys.jump && this.isGrounded) {
+      this.verticalVelocity = this.jumpForce;
+      this.isGrounded = false;
+    }
+    
+    // Apply vertical movement
+    this.z += this.verticalVelocity * deltaTime;
+    
+    // Check ground collision
+    const groundLevel = this.size; // Assuming ground is at size height
+    if (this.z <= groundLevel) {
+      this.z = groundLevel;
+      this.verticalVelocity = 0;
+      this.isGrounded = true;
+    }
+    
+    // Check ceiling collision
+    if (this.checkCollision(this.x, this.y, this.z + this.size)) {
+      this.z = Math.floor(this.z / this.size) * this.size;
+      this.verticalVelocity = 0;
+    }
+  }
+
+  /**
+   * Check collision with the environment
+   */
+  private checkCollision(newX: number, newY: number, newZ: number): boolean {
+    if (!this.localCollisionMap) return false;
+
+    // Convert world position to grid coordinates
+    const gridX = Math.floor(newX / this.size);
+    const gridY = Math.floor(newY / this.size);
+    const gridZ = Math.floor(newZ / this.size);
+    
+    // Check map bounds
+    if (gridX < 0 || gridY < 0 || 
+        gridZ < 0 || gridZ >= this.localCollisionMap.length ||
+        gridY >= this.localCollisionMap[0].length || 
+        gridX >= this.localCollisionMap[0][0].length) {
+      return true; // Collision with world boundary
+    }
+    
+    // Player collision radius
+    const radius = this.size * 0.4;
+    
+    // Check nearby grid cells for collision
+    const checkRadius = Math.ceil(radius / this.size);
+    for (let z = Math.max(0, gridZ - 1); z <= Math.min(this.localCollisionMap.length - 1, gridZ + 1); z++) {
+      for (let y = Math.max(0, gridY - checkRadius); y <= Math.min(this.localCollisionMap[z].length - 1, gridY + checkRadius); y++) {
+        for (let x = Math.max(0, gridX - checkRadius); x <= Math.min(this.localCollisionMap[z][y].length - 1, gridX + checkRadius); x++) {
+          // Skip non-solid tiles (0 = wall, everything else is passable)
+          if (this.localCollisionMap[z][y][x] !== 0) continue;
+          
+          // Calculate distance between player center and tile center
+          const tileX = x * this.size + this.size / 2;
+          const tileY = y * this.size + this.size / 2;
+          const tileZ = z * this.size + this.size / 2;
+          
+          const dx = tileX - newX;
+          const dy = tileY - newY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          
+          // Check if horizontally colliding with tile
+          if (dist < radius + (this.size / 2)) {
+            // Check vertical collision (player height)
+            if (newZ < tileZ + this.size && newZ + this.size > tileZ) {
+              return true; // Collision detected
+            }
+          }
+        }
+      }
+    }
+    
+    // No collision detected
+    return false;
   }
 
   /**

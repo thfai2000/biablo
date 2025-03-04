@@ -24,10 +24,12 @@ export class GameRenderer3D {
   private modelCache: Map<string, THREE.Object3D>;
   private clock: THREE.Clock;
   private mixers: THREE.AnimationMixer[];
+  private collisionObjects: THREE.Object3D[] = [];
   
   // Camera modes
   private cameraMode: 'thirdPerson' | 'isometric' | 'firstPerson';
   private cameraOffset: THREE.Vector3;
+  private playerLastPosition: THREE.Vector3 = new THREE.Vector3();
 
   constructor(canvas: HTMLCanvasElement, config: GameConfig) {
     this.config = config;
@@ -42,7 +44,7 @@ export class GameRenderer3D {
     
     // Default camera settings
     this.cameraMode = 'thirdPerson';
-    this.cameraOffset = new THREE.Vector3(this.tileSize * 10, this.tileSize * 15, this.tileSize * 10);
+    this.cameraOffset = new THREE.Vector3(this.tileSize * 10, this.tileSize * 20, this.tileSize * 10);
 
     // Set up Three.js scene
     this.scene = new THREE.Scene();
@@ -69,12 +71,6 @@ export class GameRenderer3D {
     // Enable orbit controls by default for testing
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
-    
-    // Add a test cube to verify rendering
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-    const cube = new THREE.Mesh(geometry, material);
-    this.scene.add(cube);
     
     // Setup lighting with increased intensity
     this.setupLighting();
@@ -116,6 +112,8 @@ export class GameRenderer3D {
         this.cameraOffset.z
       );
       this.camera.lookAt(0, 0, 0);
+    } else if (this.cameraMode === 'firstPerson') {
+      // First person camera doesn't need special setup as it's handled in updateCameraPosition
     }
   }
 
@@ -129,12 +127,16 @@ export class GameRenderer3D {
     const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
     sunLight.position.set(10, 20, 10);
     sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.far = 50;
     this.scene.add(sunLight);
     this.lights.push(sunLight);
 
     // Point lights for atmosphere
     const pointLight1 = new THREE.PointLight(0xff7700, 1, 50);
     pointLight1.position.set(0, 5, 0);
+    pointLight1.castShadow = true;
     this.scene.add(pointLight1);
     this.lights.push(pointLight1);
   }
@@ -163,11 +165,17 @@ export class GameRenderer3D {
   public loadFloor(floorLevel: number, floorData: FloorData): void {
     // Remove existing floor if it exists
     if (this.floorGeometries.has(floorLevel)) {
-      this.scene.remove(this.floorGeometries.get(floorLevel)!);
+      const existingFloor = this.floorGeometries.get(floorLevel)!;
+      // Remove all collision objects from this floor
+      this.collisionObjects = this.collisionObjects.filter(obj => !existingFloor.children.includes(obj));
+      this.scene.remove(existingFloor);
     }
 
     const floorGroup = new THREE.Group();
     const { map } = floorData;
+
+    // Clear existing collision objects
+    this.collisionObjects = [];
 
     // Materials
     const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, roughness: 0.7 });
@@ -197,6 +205,8 @@ export class GameRenderer3D {
               mesh.position.set(posX, posY, posZ);
               mesh.castShadow = true;
               mesh.receiveShadow = true;
+              // Add to collision objects
+              this.collisionObjects.push(mesh);
               break;
               
             case 1: // Floor
@@ -236,6 +246,7 @@ export class GameRenderer3D {
               trunk.position.set(posX, posY + this.tileSize/2, posZ);
               trunk.castShadow = true;
               floorGroup.add(trunk);
+              this.collisionObjects.push(trunk);
               
               // Create tree top (cone)
               const treeTop = new THREE.Mesh(
@@ -245,6 +256,7 @@ export class GameRenderer3D {
               treeTop.position.set(posX, posY + this.tileSize, posZ);
               treeTop.castShadow = true;
               floorGroup.add(treeTop);
+              this.collisionObjects.push(treeTop);
               break;
           }
           
@@ -280,7 +292,7 @@ export class GameRenderer3D {
     );
     
     const posX = pos.x * this.tileSize - (this.config.map.viewportWidth * this.tileSize) / 2;
-    const posY = pos.z * this.tileSize;
+    const posY = (pos.z || 0) * this.tileSize + (this.tileSize / 4); // Position slightly above ground
     const posZ = pos.y * this.tileSize - (this.config.map.viewportHeight * this.tileSize) / 2;
     
     stairsEffect.position.set(posX, posY, posZ);
@@ -345,7 +357,9 @@ export class GameRenderer3D {
       
       // Create body (slightly taller box)
       const bodyGeometry = new THREE.BoxGeometry(this.tileSize * 0.4, this.tileSize * 1.2, this.tileSize * 0.4);
-      const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x3366cc });
+      const bodyMaterial = new THREE.MeshStandardMaterial({ 
+        color: id === 'self' ? 0x3366cc : 0xcc3366 // Blue for self, red for others
+      });
       const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
       bodyMesh.position.y = this.tileSize * 0.6; // Lift body up
       bodyMesh.castShadow = true;
@@ -370,6 +384,12 @@ export class GameRenderer3D {
     const posY = z; // Y in 3D space is height (z in game space)
     const posZ = y - (this.config.map.viewportHeight * this.tileSize) / 2;
     
+    // Store last position for collision calculations
+    if (id === 'self') {
+      this.playerLastPosition.set(playerObj.position.x, playerObj.position.y, playerObj.position.z);
+    }
+    
+    // Update player position
     playerObj.position.set(posX, posY, posZ);
     
     // Update player rotation and camera for self
@@ -377,25 +397,74 @@ export class GameRenderer3D {
       this.playerRotation = rotation;
       playerObj.rotation.y = rotation;
       this.updateCameraPosition(playerObj);
+    } else {
+      // Smooth rotation for other players
+      const targetRotation = rotation;
+      const currentRotation = playerObj.rotation.y;
+      // Interpolate rotation
+      playerObj.rotation.y = currentRotation + (targetRotation - currentRotation) * 0.1;
     }
   }
 
   private updateCameraPosition(playerObj: THREE.Object3D): void {
-    if (this.cameraMode === 'thirdPerson') {
-      // Calculate camera position based on player position and rotation
+    // Skip if there's no player object yet
+    if (!playerObj) return;
+
+    if (this.cameraMode === 'firstPerson') {
+      // First person - position camera at player's head height
+      const headPosition = playerObj.position.clone().add(new THREE.Vector3(0, this.tileSize * 1.35, 0));
+      this.camera.position.copy(headPosition);
+      
+      // Calculate look direction
+      const lookDirection = new THREE.Vector3(
+        Math.sin(this.cameraRotation.x) * Math.cos(this.cameraRotation.y),
+        Math.sin(this.cameraRotation.y),
+        Math.cos(this.cameraRotation.x) * Math.cos(this.cameraRotation.y)
+      );
+      
+      // Look in the direction of camera rotation
+      this.camera.lookAt(headPosition.clone().add(lookDirection.multiplyScalar(10)));
+    } else if (this.cameraMode === 'thirdPerson') {
+      // Third person - position camera behind player
       const cameraOffset = new THREE.Vector3(
-        Math.sin(this.cameraRotation.x) * Math.cos(this.cameraRotation.y) * this.CAMERA_DISTANCE,
+        Math.sin(this.cameraRotation.x) * Math.cos(this.cameraRotation.y) * -this.CAMERA_DISTANCE,
         Math.sin(this.cameraRotation.y) * this.CAMERA_DISTANCE + this.tileSize * 1.5, // Add height offset
-        Math.cos(this.cameraRotation.x) * Math.cos(this.cameraRotation.y) * this.CAMERA_DISTANCE
+        Math.cos(this.cameraRotation.x) * Math.cos(this.cameraRotation.y) * -this.CAMERA_DISTANCE
       );
       
       // Position camera behind player
-      this.camera.position.copy(playerObj.position).add(cameraOffset);
+      const desiredCameraPosition = playerObj.position.clone().add(cameraOffset);
+      
+      // Check for camera collision with environment
+      const rayCaster = new THREE.Raycaster();
+      rayCaster.set(playerObj.position.clone().add(new THREE.Vector3(0, this.tileSize * 1.35, 0)), 
+                   cameraOffset.clone().normalize().negate());
+      
+      const intersects = rayCaster.intersectObjects(this.collisionObjects);
+      if (intersects.length > 0 && intersects[0].distance < cameraOffset.length()) {
+        // If collision, move camera to collision point
+        const adjustedDistance = Math.max(2, intersects[0].distance * 0.9);
+        cameraOffset.normalize().multiplyScalar(adjustedDistance);
+        this.camera.position.copy(playerObj.position.clone().add(new THREE.Vector3(0, this.tileSize * 1.35, 0)).add(cameraOffset));
+      } else {
+        // No collision, use desired position
+        this.camera.position.copy(desiredCameraPosition);
+      }
       
       // Make camera look at player position at head height
       const lookAtPoint = playerObj.position.clone();
       lookAtPoint.y += this.tileSize * 1.35; // Look at player's head height
       this.camera.lookAt(lookAtPoint);
+    } else if (this.cameraMode === 'isometric') {
+      // Isometric view - fixed angle
+      const isoDistance = this.CAMERA_DISTANCE * 3; // Increased distance for better overview
+      const isoOffset = new THREE.Vector3(isoDistance, isoDistance * 1.5, isoDistance);
+      
+      // Position camera at fixed isometric angle from player
+      this.camera.position.copy(playerObj.position.clone().add(isoOffset));
+      
+      // Look at player
+      this.camera.lookAt(playerObj.position);
     }
   }
 
@@ -545,6 +614,26 @@ export class GameRenderer3D {
     // Remove all objects from scene
     while(this.scene.children.length > 0) { 
       this.scene.remove(this.scene.children[0]); 
+    }
+  }
+  
+  // Toggle camera modes
+  public toggleCameraMode(): void {
+    // Cycle through camera modes
+    if (this.cameraMode === 'thirdPerson') {
+      this.cameraMode = 'firstPerson';
+    } else if (this.cameraMode === 'firstPerson') {
+      this.cameraMode = 'isometric';
+    } else {
+      this.cameraMode = 'thirdPerson';
+    }
+    
+    console.log(`Camera mode switched to ${this.cameraMode}`);
+    
+    // Update camera position immediately
+    const playerObj = this.playerMeshes.get('self');
+    if (playerObj) {
+      this.updateCameraPosition(playerObj);
     }
   }
 }

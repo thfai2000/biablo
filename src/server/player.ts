@@ -145,8 +145,8 @@ export class ServerPlayer {
     // Starting position - center of the actual map (which is 3x viewport size)
     this.currentFloor = config.game.initialFloor;
     this.previousFloor = -1;
-    this.x = (config.map.viewportWidth * 3) * config.map.tileSize / 2;
-    this.y = (config.map.viewportHeight * 3) * config.map.tileSize / 2;
+    this.x = 300 // (config.map.viewportWidth * 3) * config.map.tileSize / 2;
+    this.y = 300 // (config.map.viewportHeight * 3) * config.map.tileSize / 2;
     this.z = config.map.tileSize; // Initial z position (slightly above ground)
     this.lastX = this.x;
     this.lastY = this.y;
@@ -334,6 +334,7 @@ export class ServerPlayer {
    * Validate and process a 3D position update from client
    */
   public processPositionUpdate(newX: number, newY: number, newZ: number, timestamp: number): boolean {
+    
     // Calculate time difference
     const timeDiff = timestamp - this.lastUpdateTime;
     if (timeDiff <= 0) return false; // Invalid timestamp

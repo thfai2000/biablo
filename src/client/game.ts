@@ -47,6 +47,8 @@ export class Game {
   private minimapScale: number;
   private renderer3D: GameRenderer3D | null;
   private tileSize: number;  // Keep tileSize for game logic
+  private inputUpdateInterval: number | null = null;
+  private lastCameraRotation: number = 0; // Track player rotation for rendering
 
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
@@ -107,6 +109,7 @@ export class Game {
       direction: 'up' | 'down'
     }) => {
       if (this.player) {
+        console.log('positionCorrection:', data);
         this.player.x = data.x;
         this.player.y = data.y;
 
@@ -128,7 +131,6 @@ export class Game {
             displayMessage(`Moving ${data.direction} to floor ${data.floorLevel}`, 'info');
           }
         }
-        //displayMessage(`Position corrected by server -> (${this.player.x}, ${this.player.y})`, 'warning');
       }
     });
     
@@ -140,8 +142,8 @@ export class Game {
       if (floorLevel === this.currentFloor && this.player) {
         const startPos = this.getStartingPosition(floorLevel);
         if (startPos) {
-          this.player.x = startPos.x * this.tileSize;
-          this.player.y = startPos.y * this.tileSize;
+          this.player.x = 1800 //startPos.x * this.tileSize;
+          this.player.y = 1800 //startPos.y * this.tileSize;
         }
       }
     });
@@ -159,6 +161,9 @@ export class Game {
       if (this.player) {
         this.player.handleRegistration(data.id, data.playerData);
       }
+      
+      // Start sending player input updates after registration
+      this.startInputUpdates();
     });
 
     
@@ -236,12 +241,32 @@ export class Game {
     }
   }
 
+  private startInputUpdates(): void {
+    // Clear any existing interval
+    if (this.inputUpdateInterval) {
+      clearInterval(this.inputUpdateInterval);
+    }
+    
+    // Set up interval to send player inputs to server
+    this.inputUpdateInterval = window.setInterval(() => {
+      if (!this.player) return;
+      
+      const inputState = this.player.getInputState();
+      if (this.player.hasInputChange(inputState)) {
+        this.socket.emit('playerInput', inputState);
+      }
+    }, 50); // Send updates 20 times per second
+  }
+
   private updateOtherPlayers(players: any[]): void {
     // Clear players not in the update
     const currentIds = new Set(players.map(p => p.id));
     for (const [id] of this.otherPlayers) {
       if (!currentIds.has(id)) {
         this.otherPlayers.delete(id);
+        if (this.renderer3D) {
+          this.renderer3D.removeEntity(id);
+        }
       }
     }
 
@@ -257,6 +282,9 @@ export class Game {
     for (const [id] of this.npcs) {
       if (!currentIds.has(id)) {
         this.npcs.delete(id);
+        if (this.renderer3D) {
+          this.renderer3D.removeEntity(id);
+        }
       }
     }
 
@@ -332,20 +360,22 @@ export class Game {
             throw new Error('WebGL context initialization failed');
         }
         
-        // Initialize player
+        // Get initial floor data before creating player
+        this.floors[0] = await this.getFloor(0);
+        this.currentFloor = 0;
+
+        // Calculate proper starting position from floor data
+        const startPos = this.getStartingPosition(0);
+        
+        // Initialize player with config (which includes starting position)
         this.player = new Player(this.config);
         this.statsWidget.setPlayer(this.player);
-
-        // Get initial floor data
-        this.floors[0] = await this.getFloor(0);
         
-        // Set initial position
-        this.currentFloor = 0;
-        const startPos = this.getStartingPosition(0);
+        // Set correct starting position if we have it
         if (this.player && startPos) {
             this.player.x = startPos.x * this.tileSize;
             this.player.y = startPos.y * this.tileSize;
-            this.player.z = 0;
+            this.player.z = this.tileSize; // Set initial height above ground
         }
 
         // Load floor into renderer
@@ -436,32 +466,75 @@ export class Game {
     if (this.player) {
       const currentFloor = this.floors[this.currentFloor];
       if (currentFloor && currentFloor.map) {
-        this.player.update(
+        // Update player's position and check for floor changes
+        const floorChangeResult = this.player.update(
           currentFloor.map[0],
           currentFloor.upStairsPos || undefined,
           currentFloor.downStairsPos || undefined
         );
+        
+        // Handle floor changes if requested
+        if (floorChangeResult.floorChange && floorChangeResult.direction) {
+          // Emit floor change request to server
+          this.socket.emit('floorChange', { 
+            direction: floorChangeResult.direction, 
+            timestamp: Date.now() 
+          });
+          
+          // Handle the floor change locally while waiting for server confirmation
+          this.handleFloorChange({ direction: floorChangeResult.direction });
+        }
+      }
+
+      // Use 3D renderer exclusively
+      if (this.renderer3D) {
+        // Calculate player rotation from camera direction
+        let rotation = 0;
+        if (this.player.getInputState().cameraDirection) {
+          const dir = this.player.getInputState().cameraDirection;
+          rotation = Math.atan2(dir.x, dir.z);
+          this.lastCameraRotation = rotation;
+        }
+        
+        // Update player position in 3D world
+        this.renderer3D.updatePlayer(
+          'self', 
+          this.player.x, 
+          this.player.y, 
+          this.player.z, 
+          this.lastCameraRotation
+        );
       }
     }
 
-    // Use 3D renderer exclusively
-    if (this.renderer3D) {
-      // Update player positions
-      if (this.player) {
-        this.renderer3D.updatePlayer('self', this.player.x, this.player.y, this.player.z);
+    // Update other players
+    this.otherPlayers.forEach((playerData, id) => {
+      if (this.renderer3D) {
+        this.renderer3D.updatePlayer(
+          id, 
+          playerData.x, 
+          playerData.y, 
+          playerData.z || this.tileSize, 
+          playerData.rotation || 0
+        );
       }
+    });
 
-      // Update other players
-      this.otherPlayers.forEach((playerData, id) => {
-        this.renderer3D!.updatePlayer(id, playerData.x, playerData.y, playerData.z || 0);
-      });
+    // Update NPCs
+    this.npcs.forEach((npcData, id) => {
+      if (this.renderer3D) {
+        this.renderer3D.updateNPC(
+          id, 
+          npcData.type, 
+          npcData.x, 
+          npcData.y, 
+          npcData.z || this.tileSize
+        );
+      }
+    });
 
-      // Update NPCs
-      this.npcs.forEach((npcData, id) => {
-        this.renderer3D!.updateNPC(id, npcData.type, npcData.x, npcData.y, npcData.z || 0);
-      });
-
-      // Render 3D scene with UI
+    // Render 3D scene
+    if (this.renderer3D) {
       this.renderer3D.render();
     }
 
@@ -469,61 +542,60 @@ export class Game {
     requestAnimationFrame((time) => this.gameLoop(time));
   }
 
-  private renderUI(): void {
-    // Use the 3D renderer to render UI elements instead of 2D context
-    if (!this.renderer3D) return;
-
-    // Create text sprites for UI elements
-    const textElements = [];
-
-    // Floor info
-    textElements.push({
-      text: `Floor: ${this.currentFloor}`,
-      position: { x: 10, y: 20 },
-      color: 0xffffff
-    });
-
-    // Instructions
-    textElements.push({
-      text: 'Use arrow keys or WASD to move',
-      position: { x: 10, y: 40 },
-      color: 0xffffff
-    });
-    textElements.push({
-      text: 'Press Space or Enter at stairs to change floors',
-      position: { x: 10, y: 60 },
-      color: 0xffffff
-    });
-
-    // Player stats
+  renderUI(ctx: CanvasRenderingContext2D): void {
+    // Render UI elements using the context provided by the 3D renderer
+    
+    // Draw health, mana, and exp bars
     if (this.player) {
-      const playerStats = this.player.getStats();
-      textElements.push({
-        text: `HP: ${playerStats.currentHealth}/${playerStats.maxHealth}`,
-        position: { x: 10, y: 90 },
-        color: 0xffffff
-      });
-      textElements.push({
-        text: `Mana: ${playerStats.currentMana}/${playerStats.maxMana}`,
-        position: { x: 10, y: 110 },
-        color: 0xffffff
-      });
+      const stats = this.player.getStats();
+      
+      // Draw health bar
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(10, 10, 200, 20);
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+      ctx.fillRect(10, 10, 200 * (stats.currentHealth / stats.maxHealth), 20);
+      ctx.fillStyle = 'white';
+      ctx.font = '12px Arial';
+      ctx.fillText(`HP: ${stats.currentHealth}/${stats.maxHealth}`, 15, 25);
+      
+      // Draw mana bar
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(10, 35, 200, 20);
+      ctx.fillStyle = 'rgba(0, 0, 255, 0.8)';
+      ctx.fillRect(10, 35, 200 * (stats.currentMana / stats.maxMana), 20);
+      ctx.fillStyle = 'white';
+      ctx.fillText(`MP: ${stats.currentMana}/${stats.maxMana}`, 15, 50);
+      
+      // Draw exp bar
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(10, 60, 200, 20);
+      ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+      ctx.fillRect(10, 60, 200 * (stats.experience / stats.nextLevelExp), 20);
+      ctx.fillStyle = 'white';
+      ctx.fillText(`Lvl ${stats.level} - Exp: ${stats.experience}/${stats.nextLevelExp}`, 15, 75);
+      
+      // Draw floor info
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(10, 85, 200, 25);
+      ctx.fillStyle = 'white';
+      ctx.font = '14px Arial';
+      ctx.fillText(`Floor: ${this.currentFloor}`, 15, 103);
+      
+      // Draw controls info
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillRect(10, this.canvas.height - 80, 250, 70);
+      ctx.fillStyle = 'white';
+      ctx.font = '12px Arial';
+      ctx.fillText('Controls:', 15, this.canvas.height - 65);
+      ctx.fillText('WASD/Arrows - Move, Mouse - Look', 15, this.canvas.height - 50);
+      ctx.fillText('Space - Jump, E - Interact', 15, this.canvas.height - 35);
+      ctx.fillText('M - Toggle Minimap', 15, this.canvas.height - 20);
     }
+  }
 
-    // Connection status
-    const connectionStatus = this.socket.connected ? 'Connected' : 'Disconnected';
-    const statusColor = this.socket.connected ? 0x00ff00 : 0xff0000;
-    textElements.push({
-      text: `Server: ${connectionStatus}`,
-      position: { x: 10, y: 130 },
-      color: statusColor
-    });
-
-    // Update the UI elements in the renderer
-    this.renderer3D.updateUIText(textElements);
-
+  private renderGameUI(): void {
     // Handle stats widget visibility
-    if (this.statsWidget.isCurrentlyVisible()) {
+    if (this.statsWidget && this.statsWidget.isCurrentlyVisible()) {
       // Pass stats data to renderer for WebGL rendering
       const playerData = this.player ? {
         stats: this.player.getStats(),
@@ -531,7 +603,7 @@ export class Game {
         equipment: this.player.getEquipment()
       } : null;
       
-      this.renderer3D.renderStatsWidget(playerData);
+      this.renderer3D?.renderStatsWidget(playerData);
     }
   }
 
