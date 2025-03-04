@@ -9,6 +9,13 @@ export class GameRenderer3D {
   private renderer: THREE.WebGLRenderer;
   private controls: OrbitControls | null;
   private config: GameConfig;
+  // Add new properties for camera control
+  private playerRotation: number = 0;
+  private cameraRotation: { x: number; y: number } = { x: 0, y: 0 };
+  private readonly MIN_POLAR_ANGLE: number = 0;
+  private readonly MAX_POLAR_ANGLE: number = Math.PI / 2;
+  private readonly CAMERA_DISTANCE: number = 10;
+  private readonly MOUSE_SENSITIVITY: number = 0.002;
   private floorGeometries: Map<number, THREE.Group>;
   private playerMeshes: Map<string, THREE.Object3D>;
   private npcMeshes: Map<string, THREE.Object3D>;
@@ -34,17 +41,17 @@ export class GameRenderer3D {
     this.clock = new THREE.Clock();
     
     // Default camera settings
-    this.cameraMode = 'isometric';
+    this.cameraMode = 'thirdPerson';
     this.cameraOffset = new THREE.Vector3(this.tileSize * 10, this.tileSize * 15, this.tileSize * 10);
 
     // Set up Three.js scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x111111); // Lighter background to verify rendering
 
-    // Set up camera with better initial position
+    // Set up camera with better initial position and FOV
     const aspect = canvas.clientWidth / canvas.clientHeight;
-    this.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-    this.camera.position.set(0, 10, 20); // Position camera further back
+    this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+    this.camera.position.set(0, 15, 20);
     this.camera.lookAt(0, 0, 0);
 
     // Set up renderer with proper size
@@ -77,6 +84,17 @@ export class GameRenderer3D {
     
     // Handle window resize
     window.addEventListener('resize', () => this.onWindowResize(canvas));
+
+    // Add mouse move listener for camera rotation
+    canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
+    
+    // Lock pointer for better camera control
+    canvas.addEventListener('click', () => {
+      canvas.requestPointerLock();
+    });
+    
+    // Remove orbit controls as we'll implement our own camera system
+    this.controls = null;
   }
 
   private animate = () => {
@@ -318,18 +336,33 @@ export class GameRenderer3D {
     }
   }
 
-  public updatePlayer(id: string, x: number, y: number, z: number): void {
+  public updatePlayer(id: string, x: number, y: number, z: number, rotation: number = 0): void {
     let playerObj = this.playerMeshes.get(id);
     
     if (!playerObj) {
-      // Try to create a body using geometry for the player instead of loading FBX files
-      const bodyGeometry = new THREE.BoxGeometry(this.tileSize / 2, this.tileSize, this.tileSize / 2);
-      const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+      // Create a more detailed player mesh group
+      const playerGroup = new THREE.Group();
+      
+      // Create body (slightly taller box)
+      const bodyGeometry = new THREE.BoxGeometry(this.tileSize * 0.4, this.tileSize * 1.2, this.tileSize * 0.4);
+      const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x3366cc });
       const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      bodyMesh.position.y = this.tileSize * 0.6; // Lift body up
       bodyMesh.castShadow = true;
-      this.scene.add(bodyMesh);
-      this.playerMeshes.set(id, bodyMesh);
-      playerObj = bodyMesh;
+      playerGroup.add(bodyMesh);
+      
+      // Create head (smaller box)
+      const headGeometry = new THREE.BoxGeometry(this.tileSize * 0.3, this.tileSize * 0.3, this.tileSize * 0.3);
+      const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+      const headMesh = new THREE.Mesh(headGeometry, headMaterial);
+      headMesh.position.y = this.tileSize * 1.35; // Position above body
+      headMesh.castShadow = true;
+      playerGroup.add(headMesh);
+      
+      // Add player group to scene
+      this.scene.add(playerGroup);
+      this.playerMeshes.set(id, playerGroup);
+      playerObj = playerGroup;
     }
     
     // Convert game coordinates to scene coordinates
@@ -339,31 +372,44 @@ export class GameRenderer3D {
     
     playerObj.position.set(posX, posY, posZ);
     
-    // If this is the main player, update camera
-    if (id === 'self' && this.cameraMode !== 'isometric') {
+    // Update player rotation and camera for self
+    if (id === 'self') {
+      this.playerRotation = rotation;
+      playerObj.rotation.y = rotation;
       this.updateCameraPosition(playerObj);
     }
   }
 
   private updateCameraPosition(playerObj: THREE.Object3D): void {
     if (this.cameraMode === 'thirdPerson') {
-      // Third-person camera follows behind player
-      const offset = new THREE.Vector3(0, this.tileSize * 2, this.tileSize * 4);
-      this.camera.position.copy(playerObj.position).add(offset);
-      this.camera.lookAt(playerObj.position);
-    } else if (this.cameraMode === 'firstPerson') {
-      // First-person camera is at player position
-      this.camera.position.copy(playerObj.position);
-      this.camera.position.y += this.tileSize / 2; // Eye level
-      
-      // Look in the direction player is facing
-      // This would use a player direction vector in a real game
-      const lookTarget = new THREE.Vector3(
-        playerObj.position.x, 
-        playerObj.position.y + this.tileSize / 2,
-        playerObj.position.z - this.tileSize
+      // Calculate camera position based on player position and rotation
+      const cameraOffset = new THREE.Vector3(
+        Math.sin(this.cameraRotation.x) * Math.cos(this.cameraRotation.y) * this.CAMERA_DISTANCE,
+        Math.sin(this.cameraRotation.y) * this.CAMERA_DISTANCE + this.tileSize * 1.5, // Add height offset
+        Math.cos(this.cameraRotation.x) * Math.cos(this.cameraRotation.y) * this.CAMERA_DISTANCE
       );
-      this.camera.lookAt(lookTarget);
+      
+      // Position camera behind player
+      this.camera.position.copy(playerObj.position).add(cameraOffset);
+      
+      // Make camera look at player position at head height
+      const lookAtPoint = playerObj.position.clone();
+      lookAtPoint.y += this.tileSize * 1.35; // Look at player's head height
+      this.camera.lookAt(lookAtPoint);
+    }
+  }
+
+  private handleMouseMove(event: MouseEvent): void {
+    if (document.pointerLockElement) {
+      // Update camera rotation based on mouse movement
+      this.cameraRotation.x -= event.movementX * this.MOUSE_SENSITIVITY;
+      this.cameraRotation.y = Math.max(
+        this.MIN_POLAR_ANGLE,
+        Math.min(
+          this.MAX_POLAR_ANGLE,
+          this.cameraRotation.y + event.movementY * this.MOUSE_SENSITIVITY
+        )
+      );
     }
   }
 
