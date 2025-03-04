@@ -222,7 +222,7 @@ export class ServerPlayer {
 
 
     this.lastUpdateTime = Date.now();
-    this.maxVelocity = this.moveSpeed / 1000; // Convert moveSpeed to pixels per millisecond
+    this.maxVelocity = this.moveSpeed / 100; // Convert moveSpeed to pixels per millisecond
     this.tileSize = config.map.tileSize; // Initialize tile size
   }
 
@@ -249,11 +249,11 @@ export class ServerPlayer {
     let moveX = 0;
     let moveY = 0;
     
-    // Calculate 2D movement based on input
-    if (input.up) moveY -= 1;
-    if (input.down) moveY += 1;
-    if (input.left) moveX -= 1;
-    if (input.right) moveX += 1;
+    // Calculate 2D movement based on input (corrected WASD mapping)
+    if (input.up) moveY -= 1;      // W key moves forward (negative Y)
+    if (input.down) moveY += 1;    // S key moves backward (positive Y)
+    if (input.left) moveX -= 1;    // A key moves left (negative X)
+    if (input.right) moveX += 1;   // D key moves right (positive X)
     
     // Normalize diagonal movement to prevent moving faster diagonally
     if (moveX !== 0 && moveY !== 0) {
@@ -287,6 +287,7 @@ export class ServerPlayer {
     // Apply movement
     this.x += moveX;
     this.y += moveY;
+    console.log(`Player moved to: ${this.x}, ${this.y}, ${this.z}`);
     
     // Handle jumping and vertical movement
     // In a 3D game, jumping should be affected by gravity

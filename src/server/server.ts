@@ -121,7 +121,6 @@ io.on('connection', (socket) => {
           
           // Send the new floor data to the client
           const newDungeon = world.getDungeon(targetFloor);
-          
           socket.emit('positionCorrection', {
             x: player.x,
             y: player.y,
@@ -143,6 +142,7 @@ io.on('connection', (socket) => {
     );
 
     if (!positionValid) {
+      console.log('Invalid position update:', player.id, input.position);
       // If position update was invalid, send correction to client
       socket.emit('positionCorrection', {
         x: player.x,
@@ -156,6 +156,7 @@ io.on('connection', (socket) => {
     // Check for collision with map boundaries and walls
     const success = dungeon.updatePlayerPosition(player.id, player.x, player.y, player.z);
     if (!success) {
+      // console.log('Collision detected:', player.id, player.x, player.y);
       // If collision detected, reset position and notify client
       socket.emit('positionCorrection', {
         x: player.x,

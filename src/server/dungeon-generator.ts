@@ -18,6 +18,8 @@ export interface Dungeon {
   treasureChestDensity?: number;
 }
 
+const zHeight = 10;
+
 export class DungeonGenerator {
   private config: GameConfig;
   private level: number;
@@ -41,9 +43,9 @@ export class DungeonGenerator {
     this.maxRooms = config.map.maxRoomsPerFloor;
     this.roomMinSize = config.map.roomMinSize;
     this.roomMaxSize = config.map.roomMaxSize;
-    
-    // Tile types: 0=wall, 1=floor, 2=up stairs, 3=down stairs
-    this.map = Array(1).fill(0).map(() => Array(this.height).fill(0).map(() => Array(this.width).fill(0)));
+
+    // Tile types: -1=empty, 0=wall, 1=floor, 2=up stairs, 3=down stairs, 4=tree
+    this.map = Array(zHeight).fill(0).map(() => Array(this.height).fill(0).map(() => Array(this.width).fill(-1)));
     this.rooms = [];
     this.upStairsPos = null;
     this.downStairsPos = null;
@@ -51,7 +53,7 @@ export class DungeonGenerator {
   
   generate(): Dungeon {
     // Reset the map
-    this.map = Array(1).fill(0).map(() => Array(this.height).fill(0).map(() => Array(this.width).fill(0)));
+    this.map = Array(zHeight).fill(0).map(() => Array(this.height).fill(0).map(() => Array(this.width).fill(-1)));
     this.rooms = [];
     
     // Generate rooms

@@ -14,7 +14,7 @@ export class GameRenderer3D {
   private cameraRotation: { x: number; y: number } = { x: 0, y: 0 };
   private readonly MIN_POLAR_ANGLE: number = 0;
   private readonly MAX_POLAR_ANGLE: number = Math.PI / 2;
-  private readonly CAMERA_DISTANCE: number = 10;
+  private readonly CAMERA_DISTANCE: number = 20; // Increased from 10 to 20 for farther view
   private readonly MOUSE_SENSITIVITY: number = 0.002;
   private floorGeometries: Map<number, THREE.Group>;
   private playerMeshes: Map<string, THREE.Object3D>;
@@ -361,17 +361,122 @@ export class GameRenderer3D {
         color: id === 'self' ? 0x3366cc : 0xcc3366 // Blue for self, red for others
       });
       const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
-      bodyMesh.position.y = this.tileSize * 0.6; // Lift body up
+      bodyMesh.position.y = this.tileSize * 0.6;
       bodyMesh.castShadow = true;
       playerGroup.add(bodyMesh);
       
-      // Create head (smaller box)
+      // Add arms (cylinders for better LEGO style)
+      const armGeometry = new THREE.CylinderGeometry(
+        this.tileSize * 0.06, // top radius
+        this.tileSize * 0.06, // bottom radius
+        this.tileSize * 0.4, // height
+        8 // segments
+      );
+      const armMaterial = new THREE.MeshStandardMaterial({ color: bodyMaterial.color });
+      
+      // Left arm
+      const leftArm = new THREE.Group();
+      const leftArmMesh = new THREE.Mesh(armGeometry, armMaterial);
+      leftArmMesh.rotation.z = Math.PI / 3; // Angle the arm slightly outward
+      leftArmMesh.position.set(-this.tileSize * 0.25, this.tileSize * 0.9, 0);
+      leftArm.add(leftArmMesh);
+      
+      // Left hand
+      const handGeometry = new THREE.SphereGeometry(this.tileSize * 0.08, 8, 8);
+      const handMaterial = new THREE.MeshStandardMaterial({ color: 0xffcc99 }); // Same as head color
+      const leftHand = new THREE.Mesh(handGeometry, handMaterial);
+      leftHand.position.set(-this.tileSize * 0.4, this.tileSize * 0.75, 0); // Position at end of arm
+      leftArm.add(leftHand);
+      playerGroup.add(leftArm);
+      
+      // Right arm
+      const rightArm = new THREE.Group();
+      const rightArmMesh = new THREE.Mesh(armGeometry, armMaterial);
+      rightArmMesh.rotation.z = -Math.PI / 3; // Mirror angle for right arm
+      rightArmMesh.position.set(this.tileSize * 0.25, this.tileSize * 0.9, 0);
+      rightArm.add(rightArmMesh);
+      
+      // Right hand
+      const rightHand = new THREE.Mesh(handGeometry, handMaterial);
+      rightHand.position.set(this.tileSize * 0.4, this.tileSize * 0.75, 0);
+      rightArm.add(rightHand);
+      playerGroup.add(rightArm);
+
+      // Create head (LEGO style)
       const headGeometry = new THREE.BoxGeometry(this.tileSize * 0.3, this.tileSize * 0.3, this.tileSize * 0.3);
       const headMaterial = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
       const headMesh = new THREE.Mesh(headGeometry, headMaterial);
-      headMesh.position.y = this.tileSize * 1.35; // Position above body
+      headMesh.position.y = this.tileSize * 1.35;
       headMesh.castShadow = true;
       playerGroup.add(headMesh);
+
+      // Add eyes (black spheres)
+      const eyeGeometry = new THREE.SphereGeometry(this.tileSize * 0.03);
+      const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+      
+      // Left eye
+      const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      leftEye.position.set(-this.tileSize * 0.08, this.tileSize * 1.38, this.tileSize * 0.15);
+      playerGroup.add(leftEye);
+      
+      // Right eye
+      const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      rightEye.position.set(this.tileSize * 0.08, this.tileSize * 1.38, this.tileSize * 0.15);
+      playerGroup.add(rightEye);
+
+      // Add mouth (black curved line using custom geometry)
+      const mouthGeometry = new THREE.BufferGeometry();
+      const curve = new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(-this.tileSize * 0.08, 0, 0),
+        new THREE.Vector3(0, -this.tileSize * 0.02, 0),
+        new THREE.Vector3(this.tileSize * 0.08, 0, 0)
+      );
+      const points = curve.getPoints(10);
+      mouthGeometry.setFromPoints(points);
+      const mouthMaterial = new THREE.LineBasicMaterial({ color: 0x000000, linewidth: 2 });
+      const mouth = new THREE.Line(mouthGeometry, mouthMaterial);
+      mouth.position.set(0, this.tileSize * 1.32, this.tileSize * 0.15);
+      playerGroup.add(mouth);
+
+      // Add hair (multiple small boxes for a blocky hair style)
+      const hairMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3000 }); // Brown color
+      
+      // Create back hair layer
+      const backHairGeometry = new THREE.BoxGeometry(
+        this.tileSize * 0.32, // Slightly wider than head
+        this.tileSize * 0.15,
+        this.tileSize * 0.1
+      );
+      const backHair = new THREE.Mesh(backHairGeometry, hairMaterial);
+      backHair.position.set(0, this.tileSize * 1.45, -this.tileSize * 0.12);
+      playerGroup.add(backHair);
+
+      // Create top hair layer with slight overlap
+      const topHairGeometry = new THREE.BoxGeometry(
+        this.tileSize * 0.32,
+        this.tileSize * 0.1,
+        this.tileSize * 0.32
+      );
+      const topHair = new THREE.Mesh(topHairGeometry, hairMaterial);
+      topHair.position.set(0, this.tileSize * 1.52, 0);
+      playerGroup.add(topHair);
+
+      // Add side hair pieces
+      const sideHairGeometry = new THREE.BoxGeometry(
+        this.tileSize * 0.05,
+        this.tileSize * 0.15,
+        this.tileSize * 0.15
+      );
+      
+      // Left side hair
+      const leftHair = new THREE.Mesh(sideHairGeometry, hairMaterial);
+      leftHair.position.set(-this.tileSize * 0.17, this.tileSize * 1.4, 0);
+      playerGroup.add(leftHair);
+
+      // Right side hair
+      const rightHair = new THREE.Mesh(sideHairGeometry, hairMaterial);
+      rightHair.position.set(this.tileSize * 0.17, this.tileSize * 1.4, 0);
+      playerGroup.add(rightHair);
       
       // Add player group to scene
       this.scene.add(playerGroup);
