@@ -10,7 +10,7 @@ export interface Room {
 }
 
 export interface Dungeon {
-  map: number[][];
+  map: number[][][];
   upStairsPos: Position | null;
   downStairsPos: Position | null;
   enemyLevel?: number;
@@ -27,7 +27,7 @@ export class DungeonGenerator {
   private maxRooms: number;
   private roomMinSize: number;
   private roomMaxSize: number;
-  private map: number[][];
+  private map: number[][][];
   private rooms: Room[];
   private upStairsPos: Position | null;
   private downStairsPos: Position | null;
@@ -43,7 +43,7 @@ export class DungeonGenerator {
     this.roomMaxSize = config.map.roomMaxSize;
     
     // Tile types: 0=wall, 1=floor, 2=up stairs, 3=down stairs
-    this.map = Array(this.height).fill(0).map(() => Array(this.width).fill(0));
+    this.map = Array(1).fill(0).map(() => Array(this.height).fill(0).map(() => Array(this.width).fill(0)));
     this.rooms = [];
     this.upStairsPos = null;
     this.downStairsPos = null;
@@ -51,7 +51,7 @@ export class DungeonGenerator {
   
   generate(): Dungeon {
     // Reset the map
-    this.map = Array(this.height).fill(0).map(() => Array(this.width).fill(0));
+    this.map = Array(1).fill(0).map(() => Array(this.height).fill(0).map(() => Array(this.width).fill(0)));
     this.rooms = [];
     
     // Generate rooms
@@ -105,16 +105,22 @@ export class DungeonGenerator {
       this.upStairsPos = {
         x: this.rooms[0].centerX,
         y: this.rooms[0].centerY,
+        z: 0
       };
-      this.map[this.upStairsPos.y][this.upStairsPos.x] = 2; // Up stairs
+      if (this.upStairsPos) {
+        this.map[this.upStairsPos.z][this.upStairsPos.y][this.upStairsPos.x] = 2; // Up stairs
+      }
     }
     
     if (this.level < this.config.world.totalDungeonFloors) { // No down stairs on last level
       this.downStairsPos = {
         x: this.rooms[this.rooms.length - 1].centerX,
-        y: this.rooms[this.rooms.length - 1].centerY
+        y: this.rooms[this.rooms.length - 1].centerY,
+        z: 0
       };
-      this.map[this.downStairsPos.y][this.downStairsPos.x] = 3; // Down stairs
+      if (this.downStairsPos) {
+        this.map[this.downStairsPos.z][this.downStairsPos.y][this.downStairsPos.x] = 3; // Down stairs
+      }
     }
     
     // Add enemy and treasure density to dungeon result
@@ -135,7 +141,7 @@ export class DungeonGenerator {
   private _createRoom(room: Room): void {
     for (let y = room.y; y < room.y + room.h; y++) {
       for (let x = room.x; x < room.x + room.w; x++) {
-        this.map[y][x] = 1; // Floor
+        this.map[0][y][x] = 1; // Floor
       }
     }
   }
@@ -157,11 +163,11 @@ export class DungeonGenerator {
     const end = Math.max(startX, endX);
     
     for (let x = start; x <= end; x++) {
-      this.map[y][x] = 1; // Floor
+      this.map[0][y][x] = 1; // Floor
       // Add width to corridor
       for (let i = 1; i <= this.config.map.corridorWidth / 2; i++) {
-        if (y - i >= 0) this.map[y - i][x] = 1;
-        if (y + i < this.height) this.map[y + i][x] = 1;
+        if (y - i >= 0) this.map[0][y - i][x] = 1;
+        if (y + i < this.height) this.map[0][y + i][x] = 1;
       }
     }
   }
@@ -171,11 +177,11 @@ export class DungeonGenerator {
     const end = Math.max(startY, endY);
     
     for (let y = start; y <= end; y++) {
-      this.map[y][x] = 1; // Floor
+      this.map[0][y][x] = 1; // Floor
       // Add width to corridor
       for (let i = 1; i <= this.config.map.corridorWidth / 2; i++) {
-        if (x - i >= 0) this.map[y][x - i] = 1;
-        if (x + i < this.width) this.map[y][x + i] = 1;
+        if (x - i >= 0) this.map[0][y][x - i] = 1;
+        if (x + i < this.width) this.map[0][y][x + i] = 1;
       }
     }
   }
@@ -202,7 +208,7 @@ export class DungeonGenerator {
         const distance = Math.sqrt((x - centerX) ** 2 + (y - centerY) ** 2);
         
         if (distance < this.width / 3) {
-          this.map[y][x] = 1; // Floor
+          this.map[0][y][x] = 1; // Floor
         }
       }
     }
@@ -218,14 +224,14 @@ export class DungeonGenerator {
         if (distance < this.width / 3 && distance > this.width / 3.5) {
           // Higher probability of trees near the edge
           if (Math.random() < 0.4) {
-            this.map[y][x] = 4; // Tree
+            this.map[0][y][x] = 4; // Tree
           }
         } 
         // Add some random trees within the village
         else if (distance < this.width / 3.5 && distance > this.width / 8) {
           // Lower probability for scattered trees
           if (Math.random() < 0.05) {
-            this.map[y][x] = 4; // Tree
+            this.map[0][y][x] = 4; // Tree
           }
         }
       }
@@ -238,8 +244,8 @@ export class DungeonGenerator {
     // Clear trees around the cave entrance for better visibility
     for (let y = caveY - 3; y <= caveY + 3; y++) {
       for (let x = caveX - 4; x <= caveX + 4; x++) {
-        if (y >= 0 && y < this.height && x >= 0 && x < this.width && this.map[y][x] === 4) {
-          this.map[y][x] = 1; // Change tree back to floor
+        if (y >= 0 && y < this.height && x >= 0 && x < this.width && this.map[0][y][x] === 4) {
+          this.map[0][y][x] = 1; // Change tree back to floor
         }
       }
     }
@@ -248,14 +254,18 @@ export class DungeonGenerator {
     for (let y = caveY - 2; y <= caveY + 2; y++) {
       for (let x = caveX - 3; x <= caveX + 3; x++) {
         if (y >= 0 && y < this.height && x >= 0 && x < this.width) {
-          this.map[y][x] = 1; // Floor
+          this.map[0][y][x] = 1; // Floor
         }
       }
     }
     
     // Add the down stairs (dungeon entrance)
-    this.downStairsPos = { x: caveX, y: caveY };
-    this.map[caveY][caveX] = 3; // Down stairs
+    this.downStairsPos = { 
+      x: caveX, 
+      y: caveY,
+      z: 0
+    };
+    this.map[this.downStairsPos.z][this.downStairsPos.y][this.downStairsPos.x] = 3; // Down stairs
     
     return {
       map: this.map,

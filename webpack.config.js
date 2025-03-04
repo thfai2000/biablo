@@ -21,9 +21,12 @@ module.exports = {
   },
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
+    alias: {
+      'three': path.resolve('./node_modules/three')
+    }
   },
   output: {
     filename: '[name].js',
     path: path.resolve(__dirname, 'public/js'),
-  },
-};
+  }
+}

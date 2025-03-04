@@ -62,6 +62,7 @@ interface PlayerStats {
 interface Item {
   id: string;
   name: string;
+  icon: string;
   type: 'weapon' | 'armor' | 'helmet' | 'boots' | 'potion' | 'scroll' | 'misc';
   value: number;
   quantity: number;

@@ -3,7 +3,7 @@ import { ServerPlayer } from '../server/player';
 
 export interface DungeonState {
   floorLevel: number;
-  map: number[][][]; // Updated to 3D array
+  map: number[][][];
   upStairsPos: Position | null;
   downStairsPos: Position | null;
   players: Map<string, ServerPlayer>;
@@ -15,16 +15,25 @@ export interface NPC {
   type: string;
   x: number;
   y: number;
-  z: number; // Added z-coordinate
+  z: number;
   health: number;
   maxHealth: number;
   level: number;
   isAggressive: boolean;
 }
 
+export type DungeonData = {
+  map: number[][][];
+  upStairsPos: Position | null;
+  downStairsPos: Position | null;
+  enemyLevel?: number;
+  enemyDensity?: number;
+  treasureChestDensity?: number;
+}
+
 export class Dungeon {
   private floorLevel: number;
-  private map: number[][][]; // Changed to 3D array for height
+  private map: number[][][];
   private upStairsPos: Position | null;
   private downStairsPos: Position | null;
   private players: Map<string, ServerPlayer>;
@@ -34,7 +43,7 @@ export class Dungeon {
   private treasureChestDensity: number;
   private config: GameConfig;
 
-  constructor(floorData: FloorData, floorLevel: number, config: GameConfig) {
+  constructor(floorData: DungeonData, floorLevel: number, config: GameConfig) {
     this.floorLevel = floorLevel;
     this.map = floorData.map;
     this.upStairsPos = floorData.upStairsPos;
@@ -63,7 +72,7 @@ export class Dungeon {
     };
   }
   
-  public getMapData(): FloorData {
+  public getMapData(): DungeonData {
     return {
       map: this.map,
       upStairsPos: this.upStairsPos,
@@ -257,7 +266,7 @@ export class Dungeon {
         let nearestPlayer: ServerPlayer | null = null;
         let nearestDistance = Number.MAX_VALUE;
         
-        this.players.forEach((player: ServerPlayer) => {
+        for (const [_, player] of this.players) {
           // Calculate 3D distance
           const distance = Math.sqrt(
             Math.pow(player.x - npc.x, 2) + 
@@ -269,7 +278,7 @@ export class Dungeon {
             nearestPlayer = player;
             nearestDistance = distance;
           }
-        });
+        }
         
         // Simple chase logic
         if (nearestPlayer && nearestDistance < 200) { // Detection range

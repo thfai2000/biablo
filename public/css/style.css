@@ -9,35 +9,128 @@ body {
 
 .game-container {
     position: relative;
-    width: 100vw;
+    width: 100%;
     height: 100vh;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    background-color: #000;
+}
+
+.canvas-container {
+    position: relative;
+    width: 100%;
+    height: 80vh;
 }
 
 #game-canvas {
-    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    height: 80%; /* Reduced from 90% to make room for status panel */
+    height: 100%;
     background-color: #111;
     image-rendering: pixelated;
 }
 
+#ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+#status-panel {
+    position: relative;
+    width: 100%;
+    height: 20vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 10px;
+    z-index: 2;
+}
+
+#status-button {
+    padding: 5px 15px;
+    background-color: #444;
+    color: white;
+    border: 1px solid #666;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+#status-button:hover {
+    background-color: #555;
+}
+
+.stat-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+}
+
+.stat-bar {
+    width: 200px;
+    height: 20px;
+    background-color: #333;
+    border: 1px solid #666;
+    position: relative;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.stat-bar-fill {
+    height: 100%;
+    width: 100%;
+    transition: width 0.3s ease;
+}
+
+.health-bar .stat-bar-fill {
+    background-color: #ff3333;
+}
+
+.mana-bar .stat-bar-fill {
+    background-color: #3333ff;
+}
+
+.exp-bar .stat-bar-fill {
+    background-color: #33ff33;
+}
+
+.stat-bar-text {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    color: white;
+    font-size: 12px;
+    line-height: 20px;
+    text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
+}
+
 #game-messages {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    pointer-events: none;
     height: auto;
     max-height: 15%;
-    width: 25%; /* Make it smaller, only taking up 25% of the width */
+    width: 25%;
     padding: 8px;
-    background-color: rgba(0, 0, 0, 0.4); /* More transparent background */
-    border-top: 1px solid rgba(68, 68, 68, 0.5); /* More transparent border */
-    border-right: 1px solid rgba(68, 68, 68, 0.5); /* Add right border */
+    background-color: rgba(0, 0, 0, 0.4);
+    border-top: 1px solid rgba(68, 68, 68, 0.5);
+    border-right: 1px solid rgba(68, 68, 68, 0.5);
     overflow-y: auto;
-    font-size: 12px; /* Smaller text */
-    position: absolute;
-    bottom: 20%;
-    left: 0; /* Align to the left */
-    right: auto; /* Remove right alignment */
-    z-index: 900;
+    font-size: 12px;
 }
 
 .message {
@@ -56,80 +149,14 @@ body {
     color: #f55;
 }
 
-#status-panel {
-    height: 10%;
-    background-color: rgba(0, 0, 0, 0.9);
-    border-top: 1px solid #444;
-    padding: 10px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    justify-content: space-between;
-    position: relative;
-    z-index: 1000; /* Above game messages */
-}
-
-#status-button {
-    background-color: #444;
-    color: #fff;
-    border: 1px solid #aaa;
-    padding: 10px 20px;
-    cursor: pointer;
-}
-
-#status-button:hover {
-    background-color: #555;
-}
-
-.stat-container {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.stat-bar {
-    width: 150px;
-    height: 20px;
-    background-color: #333;
-    border: 1px solid #555;
-    position: relative;
-    overflow: hidden;
-}
-
-.stat-bar-fill {
-    height: 100%;
-    transition: width 0.3s ease;
-}
-
-.stat-bar-text {
-    position: absolute;
-    width: 100%;
-    text-align: center;
-    color: white;
-    font-size: 12px;
-    line-height: 20px;
-    text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
-}
-
-.health-bar .stat-bar-fill {
-    background-color: #f44;
-}
-
-.mana-bar .stat-bar-fill {
-    background-color: #44f;
-}
-
-.exp-bar .stat-bar-fill {
-    background-color: #4f4;
-}
-
 .game-message {
-    margin-bottom: 8px;
-    padding: 8px 12px;
-    border-radius: 4px;
     background-color: rgba(0, 0, 0, 0.7);
-    opacity: 1;
-    transition: opacity 0.5s ease-in-out;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+    text-align: center;
+    animation: fadeOut 3s forwards;
 }
 
 .game-message.info {
@@ -150,4 +177,10 @@ body {
 .game-message.danger {
     color: #f55;
     border-left: 3px solid #f55;
+}
+
+@keyframes fadeOut {
+    0% { opacity: 1; }
+    70% { opacity: 1; }
+    100% { opacity: 0; }
 }

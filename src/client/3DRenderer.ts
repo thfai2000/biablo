@@ -39,34 +39,54 @@ export class GameRenderer3D {
 
     // Set up Three.js scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x000000);
-    
-    // Set up fog for atmosphere
-    this.scene.fog = new THREE.FogExp2(0x000000, config.render3D.fogDensity);
+    this.scene.background = new THREE.Color(0x111111); // Lighter background to verify rendering
 
-    // Set up camera
+    // Set up camera with better initial position
     const aspect = canvas.clientWidth / canvas.clientHeight;
     this.camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-    this.initCamera();
+    this.camera.position.set(0, 10, 20); // Position camera further back
+    this.camera.lookAt(0, 0, 0);
 
-    // Set up renderer
+    // Set up renderer with proper size
     this.renderer = new THREE.WebGLRenderer({ 
       canvas,
-      antialias: true 
+      antialias: true,
+      alpha: true
     });
-    this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    this.renderer.setPixelRatio(window.devicePixelRatio);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-    // Set up orbit controls for debugging
-    this.controls = null;
     
-    // Initialize lighting
+    // Ensure renderer size matches canvas size
+    this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Limit pixel ratio
+    this.renderer.shadowMap.enabled = true;
+    
+    // Enable orbit controls by default for testing
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    
+    // Add a test cube to verify rendering
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+    const cube = new THREE.Mesh(geometry, material);
+    this.scene.add(cube);
+    
+    // Setup lighting with increased intensity
     this.setupLighting();
+    
+    // Start animation loop
+    this.animate();
     
     // Handle window resize
     window.addEventListener('resize', () => this.onWindowResize(canvas));
+  }
+
+  private animate = () => {
+    requestAnimationFrame(this.animate);
+    
+    if (this.controls) {
+      this.controls.update();
+    }
+    
+    this.render();
   }
 
   private initCamera(): void {
@@ -82,32 +102,15 @@ export class GameRenderer3D {
   }
 
   private setupLighting(): void {
-    // Ambient light
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+    // Ambient light with increased intensity
+    const ambientLight = new THREE.AmbientLight(0x404040, 1.0);
     this.scene.add(ambientLight);
     this.lights.push(ambientLight);
 
-    // Directional light (sun)
-    const sunLight = new THREE.DirectionalLight(0xffffff, this.config.render3D.lightIntensity);
-    sunLight.position.set(50, 100, 50);
+    // Directional light with better position and increased intensity
+    const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    sunLight.position.set(10, 20, 10);
     sunLight.castShadow = true;
-    
-    // Adjust shadow properties based on configuration
-    const shadowQuality = this.config.render3D.shadowQuality;
-    if (shadowQuality === 'high') {
-      sunLight.shadow.mapSize.width = 2048;
-      sunLight.shadow.mapSize.height = 2048;
-    } else if (shadowQuality === 'medium') {
-      sunLight.shadow.mapSize.width = 1024;
-      sunLight.shadow.mapSize.height = 1024;
-    } else {
-      sunLight.shadow.mapSize.width = 512;
-      sunLight.shadow.mapSize.height = 512;
-    }
-    
-    sunLight.shadow.camera.near = 0.5;
-    sunLight.shadow.camera.far = 500;
-    
     this.scene.add(sunLight);
     this.lights.push(sunLight);
 
@@ -118,7 +121,7 @@ export class GameRenderer3D {
     this.lights.push(pointLight1);
   }
 
-  private onWindowResize(canvas: HTMLCanvasElement): void {
+  public onWindowResize(canvas: HTMLCanvasElement): void {
     // Update camera aspect ratio
     this.camera.aspect = canvas.clientWidth / canvas.clientHeight;
     this.camera.updateProjectionMatrix();
@@ -319,28 +322,14 @@ export class GameRenderer3D {
     let playerObj = this.playerMeshes.get(id);
     
     if (!playerObj) {
-      // Create a temporary mesh while model loads
-      const geometry = new THREE.SphereGeometry(this.tileSize / 2, 16, 16);
-      const material = id === 'self' 
-        ? new THREE.MeshStandardMaterial({ color: 0xff0000 }) // Red for main player
-        : new THREE.MeshStandardMaterial({ color: 0x0000ff }); // Blue for other players
-      
-      playerObj = new THREE.Mesh(geometry, material);
-      playerObj.castShadow = true;
-      this.scene.add(playerObj);
-      this.playerMeshes.set(id, playerObj);
-      
-      // Try to load player model
-      this.loadModel('/models/character.fbx', 0.01).then(model => {
-        if (model) {
-          this.scene.remove(playerObj!);
-          model.castShadow = true;
-          this.scene.add(model);
-          this.playerMeshes.set(id, model);
-        }
-      }).catch(err => {
-        console.warn('Falling back to basic player model:', err);
-      });
+      // Try to create a body using geometry for the player instead of loading FBX files
+      const bodyGeometry = new THREE.BoxGeometry(this.tileSize / 2, this.tileSize, this.tileSize / 2);
+      const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+      const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+      bodyMesh.castShadow = true;
+      this.scene.add(bodyMesh);
+      this.playerMeshes.set(id, bodyMesh);
+      playerObj = bodyMesh;
     }
     
     // Convert game coordinates to scene coordinates
@@ -443,6 +432,9 @@ export class GameRenderer3D {
   }
 
   public render(): void {
+    // First render the 3D scene
+    this.renderer.clear(false, true, false); // Only clear depth buffer
+    
     // Update animation mixers
     const delta = this.clock.getDelta();
     this.mixers.forEach(mixer => mixer.update(delta));
@@ -454,6 +446,49 @@ export class GameRenderer3D {
     
     // Render the scene
     this.renderer.render(this.scene, this.camera);
+
+    // Now render UI on top using an overlay canvas
+    this.renderGameUI();
+  }
+
+  private renderGameUI(): void {
+    // Create or get the overlay canvas for UI
+    let overlayCanvas = document.getElementById('ui-overlay') as HTMLCanvasElement;
+    if (!overlayCanvas) {
+      overlayCanvas = document.createElement('canvas');
+      overlayCanvas.id = 'ui-overlay';
+      overlayCanvas.style.position = 'absolute';
+      overlayCanvas.style.top = '0';
+      overlayCanvas.style.left = '0';
+      overlayCanvas.style.pointerEvents = 'none';
+      this.renderer.domElement.parentElement?.appendChild(overlayCanvas);
+    }
+
+    // Match overlay size to main canvas
+    const width = this.renderer.domElement.clientWidth;
+    const height = this.renderer.domElement.clientHeight;
+    overlayCanvas.width = width;
+    overlayCanvas.height = height;
+    overlayCanvas.style.width = `${width}px`;
+    overlayCanvas.style.height = `${height}px`;
+
+    // Get 2D context for UI rendering
+    const ctx = overlayCanvas.getContext('2d')!;
+    ctx.clearRect(0, 0, width, height);
+
+    // Let the game render its UI
+    const game = (window as any).game;
+    if (game) {
+      game.renderUI(ctx);
+    }
+  }
+
+  public updateUIText(textElements: any[]): void {
+    // Implementation for updating UI text
+  }
+
+  public renderStatsWidget(playerData: any): void {
+    // Implementation for rendering stats widget
   }
 
   public dispose(): void {

@@ -30,43 +30,35 @@ interface GameStateUpdatePayload {
 
 export class Game {
   public canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  public tileSize: number;
   private config: GameConfig | null;
   private player: Player | null;
   private floors: { [key: number]: FloorData };
   private currentFloor: number;
-  private cameraX: number;
-  private cameraY: number;
   private lastTime: number;
   private assets: Assets;
   private showStatusPopup: boolean;
   private statusButtonRect: { x: number, y: number, width: number, height: number };
-  private statsWidget: StatsWidget; // Add StatsWidget instance
-  private socket: Socket; // Socket.IO client
+  private statsWidget: StatsWidget;
+  private socket: Socket;
   private playerId: string | null;
   private otherPlayers: Map<string, any>;
   private npcs: Map<string, any>;
   private minimapSize: number;
   private minimapScale: number;
   private renderer3D: GameRenderer3D | null;
-  private is3DMode: boolean;
-
+  private tileSize: number;  // Keep tileSize for game logic
 
   constructor() {
     this.canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
-    this.ctx = this.canvas.getContext('2d')!;
     this.tileSize = 32;
     this.config = null;
     this.player = null;
     this.floors = {};
     this.currentFloor = 0;
-    this.cameraX = 0;
-    this.cameraY = 0;
     this.lastTime = 0;
     this.showStatusPopup = false;
     this.statusButtonRect = { x: 0, y: 0, width: 0, height: 0 };
-    this.statsWidget = new StatsWidget(); // Initialize StatsWidget without player - will be set later
+    this.statsWidget = new StatsWidget();
     this.playerId = null;
     this.otherPlayers = new Map();
     this.npcs = new Map();
@@ -75,20 +67,19 @@ export class Game {
     this.minimapScale = 0.2;
     
     this.renderer3D = null;
-    this.is3DMode = true; // Set to true to enable 3D mode by default
     
     // Initialize Socket.IO connection
     this.socket = io();
     this.setupSocketListeners();
     
-    // Assets
+    // Assets (will be used by 3D renderer)
     this.assets = {
       tiles: {
         wall: '#333',
         floor: '#555',
         upStairs: '#77f',
         downStairs: '#f77',
-        tree: '#0a5' // Green color for trees
+        tree: '#0a5'  
       }
     };
     
@@ -221,7 +212,7 @@ export class Game {
           console.error(`Error loading floor ${this.currentFloor}:`, err);
           displayMessage(`Failed to load floor ${this.currentFloor}. Please try again.`, 'danger');
         });
-    } else if (this.is3DMode && this.renderer3D) {
+    } else if (this.renderer3D) {
       // We already have this floor data, ensure it's loaded in the 3D renderer
       this.renderer3D.loadFloor(this.currentFloor, this.floors[this.currentFloor]);
     }
@@ -239,18 +230,8 @@ export class Game {
       // Place player at appropriate stairs
       if (result.direction === 'up') {
         this.player.placeAtStairs(result.direction, undefined, currentFloor.downStairsPos ? { ...currentFloor.downStairsPos } : undefined);
-        // Immediately center camera on down stairs
-        if (currentFloor.downStairsPos) {
-          this.cameraX = currentFloor.downStairsPos.x * this.tileSize - this.canvas.width / 2;
-          this.cameraY = currentFloor.downStairsPos.y * this.tileSize - this.canvas.height / 2;
-        }
       } else {
         this.player.placeAtStairs(result.direction, currentFloor.upStairsPos ? { ...currentFloor.upStairsPos } : undefined, undefined);
-        // Immediately center camera on up stairs
-        if (currentFloor.upStairsPos) {
-          this.cameraX = currentFloor.upStairsPos.x * this.tileSize - this.canvas.width / 2;
-          this.cameraY = currentFloor.upStairsPos.y * this.tileSize - this.canvas.height / 2;
-        }
       }
     }
   }
@@ -303,7 +284,7 @@ export class Game {
           this.floors[level] = data;
           
           // Load the floor data into the 3D renderer if in 3D mode
-          if (this.is3DMode && this.renderer3D) {
+          if (this.renderer3D) {
             this.renderer3D.loadFloor(level, data);
           }
           
@@ -331,80 +312,63 @@ export class Game {
   
 
   async init(): Promise<void> {
-    // Set canvas size
-    this.resizeCanvas();
-    window.addEventListener('resize', () => this.resizeCanvas());
-    
-    // Load game config
-    this.config = await fetchGameConfig();
-    
-    if (!this.config) {
-      displayMessage('Could not load game configuration', 'danger');
-      return;
-    }
-    
-    // Initialize 3D renderer if 3D mode is enabled
-    if (this.is3DMode && !this.renderer3D) {
-      this.renderer3D = new GameRenderer3D(this.canvas, this.config);
-    }
-    
-    // Initialize player
-    this.player = new Player(this.config);
-    
-    // Now that we have the player, set it in the stats widget
-    this.statsWidget.setPlayer(this.player);
-    
-    // Generate the initial floor (village)
     try {
-      // Get the initial floor (village) from the server
-      this.floors[0] = await this.getFloor(0);
-      
-      // Pre-load the next floor
-      if (this.config.floors.length > 1) {
-        this.getFloor(1).catch(err => console.warn('Failed to pre-load floor 1:', err));
-      }
-      
-      // Start in the village
-      this.currentFloor = 0;
-      const startPos = this.getStartingPosition(0);
-      if (this.player && startPos) {
-        this.player.x = startPos.x * this.tileSize;
-        this.player.y = startPos.y * this.tileSize;
-      }
-      
-      // Load the current floor data into the 3D renderer
-      if (this.is3DMode && this.renderer3D && this.floors[0]) {
-        this.renderer3D.loadFloor(0, this.floors[0]);
-      }
-      
-    } catch (error) {
-      console.error('Failed to initialize floor data:', error);
-      displayMessage('Failed to load world data. Please refresh the page.', 'danger');
-      return;
-    }
-    
-    // Add click event listener for status button
-    this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
-    
-    const statusButton = document.getElementById('status-button');
-    if (statusButton) {
-      statusButton.addEventListener('click', () => {
-        this.statsWidget.toggle(); // Toggle StatsWidget visibility
-        this.render();
-      });
-    }
-    
-    // Set up additional event listeners
-    this.setupEventListeners();
-    
-    // Register player with the server
-    this.socket.emit('registerPlayer', {username: 'Player 1'});
+        // Set canvas size before anything else
+        this.resizeCanvas();
+        window.addEventListener('resize', () => this.resizeCanvas());
+        
+        // Load game config first
+        this.config = await fetchGameConfig();
+        
+        if (!this.config) {
+            throw new Error('Could not load game configuration');
+        }
 
-    displayMessage('Welcome to the village! Find the cave to enter the dungeon.', 'info');
-    
-    // Start game loop
-    requestAnimationFrame((time) => this.gameLoop(time));
-  }
+        // Initialize renderer before player
+        this.renderer3D = new GameRenderer3D(this.canvas, this.config);
+        
+        // Test WebGL context
+        if (!this.renderer3D || !(this.renderer3D as any).renderer?.getContext()) {
+            throw new Error('WebGL context initialization failed');
+        }
+        
+        // Initialize player
+        this.player = new Player(this.config);
+        this.statsWidget.setPlayer(this.player);
+
+        // Get initial floor data
+        this.floors[0] = await this.getFloor(0);
+        
+        // Set initial position
+        this.currentFloor = 0;
+        const startPos = this.getStartingPosition(0);
+        if (this.player && startPos) {
+            this.player.x = startPos.x * this.tileSize;
+            this.player.y = startPos.y * this.tileSize;
+            this.player.z = 0;
+        }
+
+        // Load floor into renderer
+        if (this.floors[0]) {
+            this.renderer3D.loadFloor(0, this.floors[0]);
+        }
+
+        // Setup event listeners
+        this.setupEventListeners();
+        this.canvas.addEventListener('click', (e) => this.handleCanvasClick(e));
+
+        // Register with server
+        this.socket.emit('registerPlayer', {username: 'Player 1'});
+        displayMessage('Welcome to the village! Find the cave to enter the dungeon.', 'info');
+
+        // Start game loop with initial timestamp
+        requestAnimationFrame((time) => this.gameLoop(time));
+
+    } catch (error) {
+        console.error('Game initialization failed:', error);
+        displayMessage('Failed to initialize game. Please refresh the page.', 'danger');
+    }
+}
 
   private handleCanvasClick(event: MouseEvent): void {
     event.preventDefault();
@@ -417,13 +381,6 @@ export class Game {
     if (this.statsWidget.isCurrentlyVisible()) {
         this.statsWidget.handleCanvasClick(x, y, this.canvas, isRightClick);
         return;
-    }
-
-    if (this.statsWidget.isCurrentlyVisible()) {
-      // Let stats widget handle the click if it's visible
-      this.statsWidget.handleCanvasClick(x, y, this.canvas);
-      this.render(); // Re-render to show any changes
-      return;
     }
   }
 
@@ -449,14 +406,16 @@ export class Game {
       // Start in center of village
       const map = floor.map;
       return {
-        x: Math.floor(map[0].length / 2),
-        y: Math.floor(map.length / 2)
+        x: Math.floor(map[0][0].length / 2),
+        y: Math.floor(map[0].length / 2),
+        z: 0
       };
     } else {
       // Start at up stairs for dungeon floors
       return floor.upStairsPos || {
-        x: Math.floor(floor.map[0].length / 2),
-        y: Math.floor(floor.map.length / 2)
+        x: Math.floor(floor.map[0][0].length / 2),
+        y: Math.floor(floor.map[0].length / 2),
+        z: 0
       };
     }
   }
@@ -464,175 +423,115 @@ export class Game {
   resizeCanvas(): void {
     this.canvas.width = window.innerWidth;
     this.canvas.height = window.innerHeight * 0.8; // 80% of window height
-  }
-  
-  updateCamera(): void {
-    if (!this.player) return;
-    
-    // Calculate the camera position to follow the player
-    const viewportWidth = this.canvas.width;
-    const viewportHeight = this.canvas.height;
-    
-    // Center the camera on the player
-    this.cameraX = this.player.x - viewportWidth / 2;
-    this.cameraY = this.player.y - viewportHeight / 2;
-    
-    // Limit camera to map boundaries
-    const currentMap = this.floors[this.currentFloor]?.map;
-    if (!currentMap) return;
-    
-    const mapWidth = currentMap[0].length * this.tileSize;
-    const mapHeight = currentMap.length * this.tileSize;
-    
-    this.cameraX = Math.max(0, Math.min(this.cameraX, mapWidth - viewportWidth));
-    this.cameraY = Math.max(0, Math.min(this.cameraY, mapHeight - viewportHeight));
+    if (this.renderer3D) {
+      this.renderer3D.onWindowResize(this.canvas);
+    }
   }
   
   gameLoop(currentTime: number): void {
-    // Calculate delta time
-    const deltaTime = (currentTime - this.lastTime) / 1000; // in seconds
+    const deltaTime = currentTime - this.lastTime;
     this.lastTime = currentTime;
-    
-    // Get floor data
-    const floorData = this.floors[this.currentFloor];
-    if (!floorData || !this.player) {
-      requestAnimationFrame((time) => this.gameLoop(time));
-      return;
-    }
-    
-    const { map, upStairsPos, downStairsPos } = floorData;
-    
-    // Update player - convert null to undefined for the stairs positions
-    const result = this.player.update(map, upStairsPos || undefined, downStairsPos || undefined);
-    
-    // Send player input to server every frame when movement keys are pressed
+
+    // Update game state
     if (this.player) {
-      const inputState = this.player.getInputState();
-      
-      // Always send input state when movement keys are pressed
-      if (inputState.movement.up || inputState.movement.down || 
-          inputState.movement.left || inputState.movement.right ||
-          this.player.hasInputChange(inputState)) {
-        this.socket.emit('playerInput', inputState);
+      const currentFloor = this.floors[this.currentFloor];
+      if (currentFloor && currentFloor.map) {
+        this.player.update(
+          currentFloor.map[0],
+          currentFloor.upStairsPos || undefined,
+          currentFloor.downStairsPos || undefined
+        );
       }
     }
-    
-    // Update camera
-    this.updateCamera();
-    
-    // Render the game
-    if (this.is3DMode && this.renderer3D) {
-      // 3D rendering
-      
-      // Update player position in 3D space
+
+    // Use 3D renderer exclusively
+    if (this.renderer3D) {
+      // Update player positions
       if (this.player) {
-        this.renderer3D.updatePlayer('self', this.player.x, this.player.y, this.player.z || 0);
+        this.renderer3D.updatePlayer('self', this.player.x, this.player.y, this.player.z);
       }
-      
+
       // Update other players
       this.otherPlayers.forEach((playerData, id) => {
-        this.renderer3D!.updatePlayer(
-          id,
-          playerData.x,
-          playerData.y,
-          playerData.z || 0
-        );
+        this.renderer3D!.updatePlayer(id, playerData.x, playerData.y, playerData.z || 0);
       });
-      
+
       // Update NPCs
       this.npcs.forEach((npcData, id) => {
-        this.renderer3D!.updateNPC(
-          id,
-          npcData.type,
-          npcData.x,
-          npcData.y,
-          npcData.z || 0
-        );
+        this.renderer3D!.updateNPC(id, npcData.type, npcData.x, npcData.y, npcData.z || 0);
       });
-      
-      // Render 3D scene
+
+      // Render 3D scene with UI
       this.renderer3D.render();
-    } else {
-      // 2D rendering (existing code)
-      this.render();
     }
-    
+
     // Continue the game loop
     requestAnimationFrame((time) => this.gameLoop(time));
   }
-  
-  render(): void {
-    // Clear canvas
-    this.ctx.fillStyle = '#000';
-    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-    
-    // Get current map
-    const floorData = this.floors[this.currentFloor];
-    if (!floorData || !floorData.map || !this.player) return;
-    
-    const { map, upStairsPos, downStairsPos, enemyLevel, enemyDensity, treasureChestDensity } = floorData;
-    
-    // Draw the map
-    DrawingHelper.drawMap(this.ctx, map, this.assets, this.tileSize, this.cameraX, this.cameraY);
-    
-    // Draw the player
-    DrawingHelper.drawPlayer(this.ctx, this.player, this.cameraX, this.cameraY);
 
-    // Draw the minimap if enabled
-    if (this.player.showMinimap && map) {
-      DrawingHelper.drawMinimap(this.ctx, map, this.player, this.player.size, this.minimapSize, this.minimapScale, upStairsPos, downStairsPos);
+  private renderUI(): void {
+    // Use the 3D renderer to render UI elements instead of 2D context
+    if (!this.renderer3D) return;
+
+    // Create text sprites for UI elements
+    const textElements = [];
+
+    // Floor info
+    textElements.push({
+      text: `Floor: ${this.currentFloor}`,
+      position: { x: 10, y: 20 },
+      color: 0xffffff
+    });
+
+    // Instructions
+    textElements.push({
+      text: 'Use arrow keys or WASD to move',
+      position: { x: 10, y: 40 },
+      color: 0xffffff
+    });
+    textElements.push({
+      text: 'Press Space or Enter at stairs to change floors',
+      position: { x: 10, y: 60 },
+      color: 0xffffff
+    });
+
+    // Player stats
+    if (this.player) {
+      const playerStats = this.player.getStats();
+      textElements.push({
+        text: `HP: ${playerStats.currentHealth}/${playerStats.maxHealth}`,
+        position: { x: 10, y: 90 },
+        color: 0xffffff
+      });
+      textElements.push({
+        text: `Mana: ${playerStats.currentMana}/${playerStats.maxMana}`,
+        position: { x: 10, y: 110 },
+        color: 0xffffff
+      });
     }
-    
-    // Draw other players
-    for (const [_, playerData] of this.otherPlayers) {
-      this.ctx.fillStyle = '#0000ff'; // Blue for other players
-      this.ctx.beginPath();
-      this.ctx.arc(
-        playerData.x - this.cameraX,
-        playerData.y - this.cameraY,
-        this.tileSize / 2,
-        0,
-        Math.PI * 2
-      );
-      this.ctx.fill();
-    }
-    
-    // Draw NPCs
-    for (const [_, npcData] of this.npcs) {
-      this.ctx.fillStyle = '#00ff00'; // Green for NPCs
-      this.ctx.beginPath();
-      this.ctx.arc(
-        npcData.x - this.cameraX,
-        npcData.y - this.cameraY,
-        this.tileSize / 2,
-        0,
-        Math.PI * 2
-      );
-      this.ctx.fill();
-    }
-    
-    // Draw UI
-    this.ctx.fillStyle = '#fff';
-    this.ctx.font = '16px Arial';
-    this.ctx.fillText(`Floor: ${this.currentFloor}`, 10, 20);
-    
-    // Draw instructions
-    this.ctx.fillText('Use arrow keys or WASD to move', 10, 40);
-    this.ctx.fillText('Press Space or Enter at stairs to change floors', 10, 60);
-    
-    // Draw basic player stats
-    const playerStats = this.player.getStats();
-    this.ctx.fillText(`HP: ${playerStats.currentHealth}/${playerStats.maxHealth}`, 10, 90);
-    this.ctx.fillText(`Mana: ${playerStats.currentMana}/${playerStats.maxMana}`, 10, 110);
-    
-    // Draw connection status
+
+    // Connection status
     const connectionStatus = this.socket.connected ? 'Connected' : 'Disconnected';
-    this.ctx.fillStyle = this.socket.connected ? '#0f0' : '#f00'; // Green if connected, red if disconnected
-    this.ctx.fillText(`Server: ${connectionStatus}`, 10, 130);
-    
-    // Draw status popup if open
+    const statusColor = this.socket.connected ? 0x00ff00 : 0xff0000;
+    textElements.push({
+      text: `Server: ${connectionStatus}`,
+      position: { x: 10, y: 130 },
+      color: statusColor
+    });
+
+    // Update the UI elements in the renderer
+    this.renderer3D.updateUIText(textElements);
+
+    // Handle stats widget visibility
     if (this.statsWidget.isCurrentlyVisible()) {
-        this.statsWidget.renderCanvas(this.ctx, this.canvas);
+      // Pass stats data to renderer for WebGL rendering
+      const playerData = this.player ? {
+        stats: this.player.getStats(),
+        inventory: this.player.getInventory(),
+        equipment: this.player.getEquipment()
+      } : null;
+      
+      this.renderer3D.renderStatsWidget(playerData);
     }
   }
 
@@ -647,24 +546,6 @@ export class Game {
 
   public unequipItem(slot: string): void {
     this.socket.emit('unequipItem', slot);
-  }
-
-  // Toggle between 2D and 3D rendering
-  public toggle3DMode(): void {
-    this.is3DMode = !this.is3DMode;
-    
-    if (this.is3DMode && !this.renderer3D) {
-      // Initialize 3D renderer if switching to 3D mode
-      this.renderer3D = new GameRenderer3D(this.canvas, this.config!);
-      
-      // Load current floor data
-      const floorData = this.floors[this.currentFloor];
-      if (floorData) {
-        this.renderer3D.loadFloor(this.currentFloor, floorData);
-      }
-    }
-    
-    displayMessage(`Switched to ${this.is3DMode ? '3D' : '2D'} mode`, 'info');
   }
 }
 

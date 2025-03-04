@@ -71,9 +71,18 @@ io.on('connection', (socket) => {
   // Handle player input
   socket.on('playerInput', (input: { 
     position: { x: number, y: number, timestamp: number },
-    movement: { up: boolean, down: boolean, left: boolean, right: boolean },
+    movement: { 
+      up: boolean, 
+      down: boolean, 
+      left: boolean, 
+      right: boolean,
+      jump: boolean,
+      crouch: boolean,
+      cameraDirection?: { x: number, y: number, z: number }
+    },
     action: boolean,
-    toggleMap: boolean
+    toggleMap: boolean,
+    deltaTime?: number
   }) => {
     const player = world.getPlayer(socket.id);
     if (!player) return;
@@ -116,10 +125,10 @@ io.on('connection', (socket) => {
           socket.emit('positionCorrection', {
             x: player.x,
             y: player.y,
+            z: player.z,
             timestamp: Date.now(),
             floorLevel: player.currentFloor
           });
-
         }
       }
       return;
@@ -129,6 +138,7 @@ io.on('connection', (socket) => {
     const positionValid = player.processPositionUpdate(
       input.position.x,
       input.position.y,
+      player.z || 0,
       input.position.timestamp
     );
 
@@ -137,24 +147,24 @@ io.on('connection', (socket) => {
       socket.emit('positionCorrection', {
         x: player.x,
         y: player.y,
+        z: player.z,
         timestamp: Date.now(),
         floorLevel: player.currentFloor
       });
     }
 
     // Check for collision with map boundaries and walls
-    const success = dungeon.updatePlayerPosition(player.id, player.x, player.y);
+    const success = dungeon.updatePlayerPosition(player.id, player.x, player.y, player.z);
     if (!success) {
       // If collision detected, reset position and notify client
       socket.emit('positionCorrection', {
         x: player.x,
         y: player.y,
+        z: player.z,
         timestamp: Date.now(),
         floorLevel: player.currentFloor
       });
     }
-
-    
   });
   
   // Handle player requesting floor data

@@ -36,18 +36,18 @@ export class World {
     }
     
     const generator = new DungeonGenerator(this.config, level);
-    let floorData;
+    let dungeonData;
     
     if (level === 0) {
       // Generate village
-      floorData = generator.generateVillage();
+      dungeonData = generator.generateVillage();
     } else {
       // Generate dungeon floor
-      floorData = generator.generate();
+      dungeonData = generator.generate();
     }
     
     // Create a new Dungeon instance with the generated data
-    this._dungeons[level] = new Dungeon(floorData, level, this.config);
+    this._dungeons[level] = new Dungeon(dungeonData, level, this.config);
   }
   
   // Add a player to the world

@@ -59,5 +59,11 @@
       "treasureChestDensity": 0.03,
       "backgroundMusic": "dungeon_theme.mp3"
     }
-  ]
+  ],
+  "render3D": {
+    "viewDistance": 1000,
+    "fogDensity": 0.015,
+    "lightIntensity": 1.0,
+    "shadowQuality": "medium"
+  }
 }
